@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import datetime
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -8,32 +9,35 @@ from dotenv import load_dotenv
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
-SYSTEM_EXTRACTOR = """
-Tu es un extracteur de données sportives en temps réel EXTRÊMEMENT RIGOUREUX. Navigue sur internet pour trouver les VRAIS événements sportifs de ce soir ou du week-end (mars 2026).
-ATTENTION AUX HALLUCINATIONS ET TRANSFERTS RÉCENTS : Vérifie obligatoirement les prêts et transferts du mercato d'hiver 2025/2026 (Exemple CRITIQUE : Endrick a été prêté à l'Olympique Lyonnais, il ne joue PLUS au Real Madrid). Sois ultra pointilleux et base-toi UNIQUEMENT sur l'actualité en temps réel de 2026.
-Trouve AU MOINS 15 à 20 événements sportifs, en incluant OBLIGATOIREMENT : 
-- Football (Premier League, Ligue des Champions, Ligue 1)
-- Rugby (Pro D2, Top 14, 6 Nations)
-- Basket (NBA)
-- Cyclisme ou Sports Mécaniques (F1, Moto GP) si des événements sont proches.
-Pour CHAQUE événement, cherche activement les cotes proposées par Parions Sport, Betclic ou Winamax pour le marché principal (1N2 ou Vainqueur), ainsi que pour un pari alternatif.
+def get_base_extractor_prompt():
+    today = datetime.datetime.now().strftime("%A %d %B %Y")
+    return f"""
+Tu es un extracteur de données sportives en temps réel EXTRÊMEMENT RIGOUREUX. Navigue sur internet pour trouver les VRAIS événements sportifs prévus EXACTEMENT pour aujourd'hui ({today}) ou ce week-end.
+CRITIQUE ET IMPÉRATIF : Tu as l'interdiction ABSOLUE d'inventer des matchs. Tu dois vérifier le calendrier officiel. S'il n'y a pas de Ligue des Champions aujourd'hui, N'INVENTE PAS UN MATCH Real-Liverpool. Si un match s'est déjà joué hier, ne le propose pas.
+ATTENTION : Vérifie les transferts du mercato d'hiver 2026 (Endrick est à l'OL !).
+Cherche AU MOINS 15 à 20 événements réels, en balayant : 
+- Football (Vérifie les matchs du jour : Ligue 1, Premier League, etc.)
+- Rugby (Pro D2, Top 14)
+- Basket (NBA de la nuit)
+- Cyclisme ou Sports Mécaniques
+Pour chaque événement réel, trouve ses vraies cotes (1N2) sur les bookmakers français.
 Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
-{
+{{
     "matches": [
-        {
+        {{
             "id": "1",
             "sport": "Football",
             "competition": "Nom de la compétition",
             "homeTeam": "Equipe Domicile",
             "awayTeam": "Equipe Extérieur",
-            "date": "Heure du match",
-            "odds": {"1": 1.50, "N": 4.00, "2": 6.50},
-            "specialMarket": "ex: Mbappé Buteur",
+            "date": "Date réelle du match",
+            "odds": {{"1": 1.50, "N": 4.00, "2": 6.50}},
+            "specialMarket": "ex: Buteur X",
             "specialOdd": 2.10
-        }
+        }}
     ]
-}
-Renvoie UNIQUEMENT le JSON. Pas de texte avant ou après.
+}}
+Renvoie UNIQUEMENT le JSON. Pas de texte.
 """
 
 SYSTEM_LIVE_EXTRACTOR = """
@@ -66,13 +70,14 @@ def fetch_live_web_data():
         return []
         
     client = genai.Client(api_key=api_key)
+    sys_prompt = get_base_extractor_prompt()
     try:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents="Cherche les matchs de ce soir avec leurs cotes sur les sites de paris sportifs français et extrais le JSON.",
+            contents="Fais une recherche internet de l'agenda sportif d'aujourd'hui. Extrais uniquement les MATCHS RÉELS ET OFFICIELS d'aujourd'hui et demain. AUCUNE INVENTION.",
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_EXTRACTOR,
-                temperature=0.2,
+                system_instruction=sys_prompt,
+                temperature=0.0,
                 tools=[{"google_search": {}}]
             ),
         )

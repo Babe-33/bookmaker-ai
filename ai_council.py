@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import datetime
+from real_matches_scraper import scrape_real_matches
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -65,34 +66,15 @@ Renvoie UNIQUEMENT le JSON.
 """
 
 def fetch_live_web_data():
-    """Uses Gemini Google Search to find real matches and real odds today."""
-    if not api_key:
-        return []
-        
-    client = genai.Client(api_key=api_key)
-    sys_prompt = get_base_extractor_prompt()
+    """
+    Directly scrapes API endpoints to guarantee perfectly real matches and odds for today.
+    No more LLM hallucinations on schedules or betting markets.
+    """
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Fais une recherche internet de l'agenda sportif d'aujourd'hui. Extrais uniquement les MATCHS RÉELS ET OFFICIELS d'aujourd'hui et demain. AUCUNE INVENTION.",
-            config=types.GenerateContentConfig(
-                system_instruction=sys_prompt,
-                temperature=0.0,
-                tools=[{"google_search": {}}]
-            ),
-        )
-        
-        raw = response.text
-        # Clean markdown if present
-        if "```json" in raw:
-            raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw:
-            raw = raw.split("```")[1].split("```")[0]
-            
-        data = json.loads(raw.strip())
-        return data.get("matches", [])
+        matches = scrape_real_matches()
+        return matches
     except Exception as e:
-        print(f"Error fetching live web data via Gemini: {e}")
+        print(f"Error fetching live matches: {e}")
         return []
 
 def fetch_live_in_play_data():

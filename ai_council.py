@@ -183,34 +183,58 @@ def call_persona(client, system_prompt, match_data, use_search=False):
     )
     return response.text
 
-async def run_ai_council(matches):
-    """Runs the 4 personas concurrently with live web search capabilities to build the ticket."""
-    if not api_key:
-        return {"error": "API Key missing"}
-        
-    client = genai.Client(api_key=api_key)
-    
+def build_prompt_data(matches):
     prompt_data = "Matchs et cotes disponibles ce soir :\n"
     for m in matches:
         odds_str = f"1: {m['odds'].get('1', '-')} / N: {m['odds'].get('N', '-')} / 2: {m['odds'].get('2', '-')}"
         spec_str = f" | Pari Spécial: {m.get('specialMarket', 'Aucun')} à {m.get('specialOdd', '-')}"
         prompt_data += f"- ID {m['id']} | {m['sport']} : {m['homeTeam']} vs {m['awayTeam']} | Cotes 1N2: {odds_str}{spec_str}\n"
+    return prompt_data
 
-    # Define system instructions
-    sys_stat = "Tu es 'Le Statisticien', perfectionniste et pointilleux. Utilise Google pour trouver des statistiques mathématiques réelles, météo, historiques des arbitres. ATTENTION : vérifie les effectifs actuels et compos probables. Cherche les Value Bets en croisant données et cotes. Fais un résumé chiffré de 5 lignes."
-    sys_expert = "Tu es 'L'Expert Terrain', le pronostiqueur francophone ultime, connu pour sa Rigueur extrême. Utilise Google pour valider les compositions d'équipe prévues, les blessés, les suspendus (Exemple : Souviens-toi qu'Endrick est titulaire à l'OL maintenant, pas au Real Madrid). Croise tes infos avec celles données aujourd'hui sur 'Les Paris RMC' et 'Winamax TV'. Fais un résumé terrain expert de 5 lignes."
-    sys_pessimist = "Tu es 'L'Avocat du Diable'. Ton but est de trouver LA FAILLE qui ferait perdre le pari évident. Sois factuel. Vérifie la véracité des informations sportives (mercato hiver 2026). Utilise internet pour trouver l'historique noir ou la fatigue extrême des favoris de ces matchs. Rédige un avis pessimiste de 4 lignes maximum."
-    sys_trend = "Tu es 'Le Réseauteur'. Tu analyses où va l'argent (Market Movers) et le consensus du public (Reddit, Twitter, Tipsters étrangers). Cherche sur internet quelles sont les équipes les plus pariées (Public Betting) sur ces matchs et si des cotes chutent brutalement (Drop Odds). Fais un résumé de 4 lignes maximum."
+# Personas Instructions
+sys_stat = "Tu es 'Le Statisticien', perfectionniste et pointilleux. Utilise Google pour trouver des statistiques mathématiques réelles, météo, historiques des arbitres. ATTENTION : vérifie les effectifs actuels et compos probables. Cherche les Value Bets en croisant données et cotes. Fais un résumé chiffré de 5 lignes."
+sys_expert = "Tu es 'L'Expert Terrain', le pronostiqueur francophone ultime, connu pour sa Rigueur extrême. Utilise Google pour valider les compositions d'équipe prévues, les blessés, les suspendus (Exemple : Souviens-toi qu'Endrick est titulaire à l'OL maintenant, pas au Real Madrid). Croise tes infos avec celles données aujourd'hui sur 'Les Paris RMC' et 'Winamax TV'. Fais un résumé terrain expert de 5 lignes."
+sys_pessimist = "Tu es 'L'Avocat du Diable'. Ton but est de trouver LA FAILLE qui ferait perdre le pari évident. Sois factuel. Vérifie la véracité des informations sportives (mercato hiver 2026). Utilise internet pour trouver l'historique noir ou la fatigue extrême des favoris de ces matchs. Rédige un avis pessimiste de 4 lignes maximum."
+sys_trend = "Tu es 'Le Réseauteur'. Tu analyses où va l'argent (Market Movers) et le consensus du public (Reddit, Twitter, Tipsters étrangers). Cherche sur internet quelles sont les équipes les plus pariées (Public Betting) sur ces matchs et si des cotes chutent brutalement (Drop Odds). Fais un résumé de 4 lignes maximum."
 
-    # Run the 4 experts concurrently to save massive time
-    stat_task = asyncio.to_thread(call_persona, client, sys_stat, f"Trouve les stats détaillées des matchs suivants:\n{prompt_data}", True)
-    expert_task = asyncio.to_thread(call_persona, client, sys_expert, f"Trouve les avis de RMC, compos et blessés sur ces matchs:\n{prompt_data}", True)
-    pessimist_task = asyncio.to_thread(call_persona, client, sys_pessimist, f"Détruis les espoirs des favoris sur ces matchs:\n{prompt_data}", True)
-    trend_task = asyncio.to_thread(call_persona, client, sys_trend, f"Quelles sont les grosses tendances de paris et chutes de cotes sur ces matchs:\n{prompt_data}", True)
+async def run_statistician(matches):
+    if not api_key: return "API Key missing"
+    client = genai.Client(api_key=api_key)
+    prompt_data = build_prompt_data(matches)
+    return await asyncio.to_thread(call_persona, client, sys_stat, f"Trouve les stats détaillées des matchs suivants:\n{prompt_data}", True)
 
-    stat_response, expert_response, pessimist_response, trend_response = await asyncio.gather(
-        stat_task, expert_task, pessimist_task, trend_task
-    )
+async def run_expert(matches):
+    if not api_key: return "API Key missing"
+    client = genai.Client(api_key=api_key)
+    prompt_data = build_prompt_data(matches)
+    return await asyncio.to_thread(call_persona, client, sys_expert, f"Trouve les avis de RMC, compos et blessés sur ces matchs:\n{prompt_data}", True)
+
+async def run_pessimist(matches):
+    if not api_key: return "API Key missing"
+    client = genai.Client(api_key=api_key)
+    prompt_data = build_prompt_data(matches)
+    return await asyncio.to_thread(call_persona, client, sys_pessimist, f"Détruis les espoirs des favoris sur ces matchs:\n{prompt_data}", True)
+
+async def run_trend(matches):
+    if not api_key: return "API Key missing"
+    client = genai.Client(api_key=api_key)
+    prompt_data = build_prompt_data(matches)
+    return await asyncio.to_thread(call_persona, client, sys_trend, f"Quelles sont les grosses tendances de paris et chutes de cotes sur ces matchs:\n{prompt_data}", True)
+
+async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
+    if not api_key: return {"error": "API Key missing"}
+    client = genai.Client(api_key=api_key)
+    prompt_data = build_prompt_data(matches)
+    
+    # Run the 4 experts concurrently to save massive time if it's the legacy call
+    if not stat_response:
+        stat_task = run_statistician(matches)
+        expert_task = run_expert(matches)
+        pessimist_task = run_pessimist(matches)
+        trend_task = run_trend(matches)
+        stat_response, expert_response, pessimist_response, trend_response = await asyncio.gather(
+            stat_task, expert_task, pessimist_task, trend_task
+        )
 
     # 5. Moi (Le Bookmaker / ticket final)
     sys_bookie = f"""Tu es l'Expert Bookmaker de l'équipe, ton seul objectif est la RENTABILITE. Ta mission est de proposer les paris LES PLUS SURS OU LES MIEUX VALORISES parmi la liste.
@@ -239,22 +263,13 @@ Mets-toi dans la peau d'un pronostiqueur pro. Tu DOIS retourner un objet JSON VA
     final_ticket_json_str = await asyncio.to_thread(call_persona, client, sys_bookie, prompt_data, False)
     
     try:
-        # Better JSON extraction
         raw = final_ticket_json_str
-        if "```json" in raw:
-            raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw:
-            raw = raw.split("```")[1].split("```")[0]
-            
+        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
+        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
         final_ticket = json.loads(raw.strip())
-    except Exception as e:
-        print(f"Error parsing final ticket JSON. Raw output: {final_ticket_json_str}")
-        final_ticket = {
-            "debate": "Erreur lors de la génération du JSON par l'IA.",
-            "total_odds": 0,
-            "selections": []
-        }
-
+    except:
+        final_ticket = {"debate": "Erreur extraction JSON ticket final.", "total_odds": 0, "selections": []}
+        
     return {
         "statistician": stat_response,
         "expert": expert_response,
@@ -262,6 +277,12 @@ Mets-toi dans la peau d'un pronostiqueur pro. Tu DOIS retourner un objet JSON VA
         "trend": trend_response,
         "ticket": final_ticket
     }
+
+async def run_ai_council(matches):
+    """Legacy wrapper for backwards compat."""
+    return await run_bookmaker(matches)
+
+
 
 def run_live_council(matches):
     """Analyzes IN-PLAY matches to find immediate betting opportunities."""

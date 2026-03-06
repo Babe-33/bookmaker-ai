@@ -109,11 +109,15 @@ document.addEventListener('DOMContentLoaded', () => {
         trendResponse.innerText = '';
 
         try {
-            // Trigger parallel fetches
-            const statPromise = fetch('/api/council/statistician').then(r => r.json());
-            const expertPromise = fetch('/api/council/expert').then(r => r.json());
-            const pessimistPromise = fetch('/api/council/pessimist').then(r => r.json());
-            const trendPromise = fetch('/api/council/trend').then(r => r.json());
+            // Trigger parallel fetches with safe fallbacks
+            const safeFetch = (url) => fetch(url)
+                .then(r => r.ok ? r.json() : { text: "❌ Serveur surchargé (Erreur 500)" })
+                .catch(() => ({ text: "❌ Erreur de connexion" }));
+
+            const statPromise = safeFetch('/api/council/statistician');
+            const expertPromise = safeFetch('/api/council/expert');
+            const pessimistPromise = safeFetch('/api/council/pessimist');
+            const trendPromise = safeFetch('/api/council/trend');
 
             let statText = "⏳ Analyse en cours...", expertText = "⏳ Analyse en cours...", pessimistText = "⏳ Analyse en cours...", trendText = "⏳ Analyse en cours...";
 
@@ -141,21 +145,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 statText = data.text;
                 statResponse.innerText = `"${statText}"`;
                 updateChat();
-            }).catch(() => { statText = "Erreur"; updateChat(); });
+            });
 
             expertPromise.then(data => {
                 expertResponse.classList.remove('shimmer');
                 expertText = data.text;
                 expertResponse.innerText = `"${expertText}"`;
                 updateChat();
-            }).catch(() => { expertText = "Erreur"; updateChat(); });
+            });
 
             pessimistPromise.then(data => {
                 pessimistResponse.classList.remove('shimmer');
                 pessimistText = data.text;
                 pessimistResponse.innerText = `"${pessimistText}"`;
                 updateChat();
-            }).catch(() => { pessimistText = "Erreur"; updateChat(); });
+            });
 
             trendPromise.then(data => {
                 trendResponse.classList.remove('shimmer');

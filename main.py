@@ -25,7 +25,9 @@ current_matches_cache = []
 async def get_matches(force_refresh: bool = False):
     global current_matches_cache
     if not current_matches_cache or force_refresh:
-        current_matches_cache = fetch_live_web_data()
+        new_matches = fetch_live_web_data()
+        if new_matches or not current_matches_cache:
+            current_matches_cache = new_matches
     return {"matches": current_matches_cache}
 
 @app.get("/api/council")

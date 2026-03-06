@@ -35,11 +35,17 @@ def scrape_real_matches(leagues=None):
     matches = []
     match_id_counter = 1
     
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+    }
+    
     for sport_label, core_sport1, core_sport2, league_code, competition_name in leagues:
         url = f"https://site.api.espn.com/apis/site/v2/sports/{core_sport2}/{league_code}/scoreboard"
         try:
-            r = requests.get(url, timeout=10)
+            r = requests.get(url, headers=headers, timeout=10)
             if r.status_code != 200:
+                print(f"ESPN returned {r.status_code} for {competition_name}")
                 continue
             
             data = r.json()

@@ -133,6 +133,16 @@ def fetch_live_web_data():
                 
             niche_data = json.loads(raw.strip())
             niche_matches = niche_data.get("matches", [])
+            
+            # Ensure odds object has 1, N, 2 keys explicitly
+            for nm in niche_matches:
+                if "odds" not in nm or not isinstance(nm["odds"], dict):
+                    nm["odds"] = {"1": "-", "N": "-", "2": "-"}
+                else:
+                    nm["odds"]["1"] = nm["odds"].get("1", nm["odds"].get("home", "-"))
+                    nm["odds"]["N"] = nm["odds"].get("N", nm["odds"].get("draw", "-"))
+                    nm["odds"]["2"] = nm["odds"].get("2", nm["odds"].get("away", "-"))
+
             matches.extend(niche_matches)
             
         except Exception as e:
@@ -173,15 +183,33 @@ def call_persona(client, system_prompt, match_data, use_search=False):
         "system_instruction": system_prompt,
         "temperature": 0.5,
     }
+
     if use_search:
         config_kwargs["tools"] = [{"google_search": {}}]
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=match_data,
-        config=types.GenerateContentConfig(**config_kwargs),
-    )
-    return response.text
+def call_persona(client, system_prompt, match_data, use_search=False):
+    if not client:
+        return "Pas de clé API."
+
+    config_kwargs = {
+        "system_instruction": system_prompt,
+        "temperature": 0.5,
+    }
+    if use_search:
+        config_kwargs["tools"] = [{"google_search": {}}]
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=match_data,
+            config=types.GenerateContentConfig(**config_kwargs),
+        )
+        return response.text
+    except Exception as e:
+        err_msg = str(e)
+        if "429" in err_msg or "quota" in err_msg.lower():
+            return "⏳ (Quota Google dépassé. Attendez 1 minute avant la prochaine analyse.)"
+        return f"Erreur IA : {err_msg[:50]}..."
 
 def build_prompt_data(matches):
     prompt_data = "Matchs et cotes disponibles ce soir :\n"

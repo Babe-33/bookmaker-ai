@@ -65,17 +65,80 @@ Renvoie UN JSON avec cette structure :
 Renvoie UNIQUEMENT le JSON.
 """
 
+def get_niche_sports_extractor_prompt():
+    today = datetime.datetime.now().strftime("%A %d %B %Y")
+    return f"""
+Tu es un robot d'extraction RIGOUREUX spécialisé UNIQUEMENT dans les sports de niche français.
+Navigue sur internet (sofascore, lequipe, flashscore) pour trouver l'agenda EXACT d'aujourd'hui ({today}) ou de demain MAXIMUM.
+AUCUNE INVENTION TOLÉRÉE. Vérifie le calendrier officiel de ces compétitions.
+Cherche les matchs de ces compétitions SPÉCIFIQUES :
+- Rugby : Pro D2, Nationale
+- Handball : Starligue (LNH), Ligue Butagaz
+- Hockey sur Glace : Ligue Magnus
+- Volley-ball : Marmara SpikeLigue
+- Cyclisme / F1 : Si une course est prévue ce week-end.
+
+Trouve entre 4 et 8 matchs MAXIMUM parmi ces sports S'ILS ONT LIEU CE SOIR.
+Pour chaque événement, trouve ses cotes réelles sur les bookmakers français (Parions Sport, Betclic, Winamax).
+Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
+{{
+    "matches": [
+        {{
+            "id": "niche_1",
+            "sport": "Rugby",
+            "competition": "Pro D2",
+            "homeTeam": "Brive",
+            "awayTeam": "Béziers",
+            "date": "Date réelle du match",
+        }}
+    ]
+}}
+Renvoie UNIQUEMENT le JSON. Pas de texte.
+"""
+
 def fetch_live_web_data():
     """
-    Directly scrapes API endpoints to guarantee perfectly real matches and odds for today.
-    No more LLM hallucinations on schedules or betting markets.
+    Hybrid Scraper:
+    1. Gets 100% real matches and odds from ESPN API (Football, NBA, Top 14).
+    2. Fallbacks to a HIGHLY CONSTRAINED Gemini search strictly for French niche sports (Pro D2, Starligue, Magnus).
     """
+    matches = []
+    # 1. API Direct (ESPN)
     try:
-        matches = scrape_real_matches()
-        return matches
+        espn_matches = scrape_real_matches()
+        matches.extend(espn_matches)
     except Exception as e:
-        print(f"Error fetching live matches: {e}")
-        return []
+        print(f"Error fetching ESPN matches: {e}")
+
+    # 2. Scraper Niche Sport via Gemini (To cover Pro D2, LNH, Magnus...)
+    if api_key:
+        client = genai.Client(api_key=api_key)
+        sys_prompt = get_niche_sports_extractor_prompt()
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2 (Rugby), la Starligue (Handball) et la Ligue Magnus (Hockey). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers.",
+                config=types.GenerateContentConfig(
+                    system_instruction=sys_prompt,
+                    temperature=0.0,
+                    tools=[{"google_search": {}}]
+                ),
+            )
+            
+            raw = response.text
+            if "```json" in raw:
+                raw = raw.split("```json")[1].split("```")[0]
+            elif "```" in raw:
+                raw = raw.split("```")[1].split("```")[0]
+                
+            niche_data = json.loads(raw.strip())
+            niche_matches = niche_data.get("matches", [])
+            matches.extend(niche_matches)
+            
+        except Exception as e:
+            print(f"Error fetching niche sports via Gemini: {e}")
+            
+    return matches
 
 def fetch_live_in_play_data():
     """Uses Gemini to find matches CURRENTLY playing for In-Play Live Betting."""

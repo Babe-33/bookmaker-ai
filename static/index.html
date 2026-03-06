@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon.png">
+    <title>Bookmaker AI - Le Conseil</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="dark-theme">
+    <!-- Security Overlay -->
+    <div id="securityOverlay"
+        style="position: fixed; inset: 0; background-color: #0f172a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h1 style="color: white; margin-bottom: 2rem;">🔒 Accès Restreint</h1>
+        <p style="color: #94a3b8; margin-bottom: 1rem;">Veuillez entrer la phrase d'accès secrète.</p>
+        <input type="password" id="passphraseInput" placeholder="Phrase secrète..."
+            style="padding: 1rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: white; width: 300px; margin-bottom: 1rem; text-align: center;">
+        <button id="unlockBtn" class="btn cta" style="width: 300px;">Déverrouiller</button>
+        <p id="securityError" style="color: #ef4444; margin-top: 1rem; display: none;">Phrase incorrecte.</p>
+    </div>
+
+    <!-- Background Decoration -->
+    <div class="circles">
+        <div class="circle circle-1"></div>
+        <div class="circle circle-2"></div>
+    </div>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <img src="/static/icon.png" class="icon" alt="Logo"
+                    style="width: 2.5rem; height: 2.5rem; border-radius: 8px;">
+                <h1>Bookmaker AI</h1>
+            </div>
+            <p class="subtitle">Analyse Parions Sport multi-sports & expertise RMC par les IA</p>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Control Panel -->
+            <section class="controls glass-panel">
+                <button id="fetchMatchesBtn" class="btn primary">🔄 1. Extraire les Matchs (Web Actuel)</button>
+                <button id="runCouncilBtn" class="btn magic" disabled>✨ 2. Lancer le Débat IA</button>
+            </section>
+
+            <div class="dashboard-grid">
+
+                <!-- Left Column: Matches list -->
+                <section class="matches-section glass-panel">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                        <h2 style="margin: 0;">📅 Matchs du Jour</h2>
+                        <div id="categoryFilters" class="filters-container"
+                            style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem;">
+                            <button class="filter-btn active" data-sport="all">Tous</button>
+                            <button class="filter-btn" data-sport="football">Football</button>
+                            <button class="filter-btn" data-sport="rugby">Rugby</button>
+                            <button class="filter-btn" data-sport="basket">NBA</button>
+                            <button class="filter-btn" data-sport="tennis">Tennis</button>
+                            <button class="filter-btn" data-sport="other">Autres (Hockey, Cyclisme...)</button>
+                        </div>
+                    </div>
+
+                    <div id="matchesList" class="matches-list">
+                        <div class="empty-state">Cliquez sur "Récupérer les Matchs" pour commencer.</div>
+                    </div>
+                </section>
+
+                <!-- Right Column: AI Debate & Ticket -->
+                <div class="ai-column">
+                    <!-- AI Debate -->
+                    <section class="debate-section glass-panel">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h2>🗣️ Le Conseil des IA</h2>
+                            <button id="togglePersonasBtn" class="filter-btn">👁️ Masquer les avis</button>
+                        </div>
+                        <div class="personas-container" id="personasGrid">
+
+                            <!-- Statistician -->
+                            <div class="persona-card" id="personaStat">
+                                <div class="persona-header">
+                                    <div class="persona-avatar">📊</div>
+                                    <h3>Le Statisticien</h3>
+                                </div>
+                                <div class="persona-body" id="statResponse">
+                                    En attente d'analyse...
+                                </div>
+                            </div>
+
+                            <!-- Expert -->
+                            <div class="persona-card" id="personaExpert">
+                                <div class="persona-header">
+                                    <div class="persona-avatar">🧠</div>
+                                    <h3>L'Expert Terrain</h3>
+                                </div>
+                                <div class="persona-body" id="expertResponse">
+                                    En attente d'analyse...
+                                </div>
+                            </div>
+
+                            <!-- Pessimist -->
+                            <div class="persona-card" id="personaPessimist" style="border-top: 2px solid #ef4444;">
+                                <div class="persona-header">
+                                    <div class="persona-avatar">👿</div>
+                                    <h3>L'Avocat du Diable</h3>
+                                </div>
+                                <div class="persona-body" id="pessimistResponse">
+                                    En attente d'analyse...
+                                </div>
+                            </div>
+
+                            <!-- Trend -->
+                            <div class="persona-card" id="personaTrend" style="border-top: 2px solid #a855f7;">
+                                <div class="persona-header">
+                                    <div class="persona-avatar">📈</div>
+                                    <h3>Le Réseauteur</h3>
+                                </div>
+                                <div class="persona-body" id="trendResponse">
+                                    En attente d'analyse...
+                                </div>
+                            </div>
+
+                        </div>
+                    </section>
+
+                    <!-- NEW: Expandable Chat Dialogue -->
+                    <section class="glass-panel" style="margin-bottom: 2rem; border-color: #8b5cf6;">
+                        <details style="cursor: pointer;">
+                            <summary
+                                style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: bold; color: #a78bfa; padding: 0.5rem 0; outline: none;">
+                                💬 Afficher le Dialogue complet des Experts
+                            </summary>
+                            <div id="chatDialogue"
+                                style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+                                <!-- Chat bubbles will be injected here -->
+                                <div style="color: #94a3b8; font-style: italic; font-size: 0.9rem;">En attente de
+                                    l'analyse...</div>
+                            </div>
+                        </details>
+                    </section>
+
+                    <!-- Final Ticket -->
+                    <section class="ticket-section glass-panel highlight-panel">
+                        <div class="ticket-header">
+                            <h2>🎫 Le Ticket Bookmaker (Value Bet)</h2>
+                            <div class="total-odds" id="totalOddsValue">x 0.00</div>
+                        </div>
+
+                        <div class="bookie-explanation" id="bookieDebate">
+                            L'IA Bookmaker (Moi) synthétisera les avis ici pour proposer le meilleur combiné.
+                        </div>
+
+                        <div id="finalTicketList" class="ticket-list">
+                            <!-- Ticket items will be injected here -->
+                        </div>
+
+                        <button id="placeBetBtn" class="btn cta full-width" disabled>Jouer sur Parions Sport</button>
+                    </section>
+
+                    <!-- NEW: Live Betting Section -->
+                    <section class="live-section glass-panel" style="margin-top: 2rem; border-color: #ef4444;">
+                        <h2 style="color: #ef4444;">🔴 Paris en Direct (In-Play)</h2>
+                        <button id="liveMatchBtn" class="btn cta full-width"
+                            style="background-color: #ef4444; font-size: 0.9rem; padding: 0.5rem; margin-bottom: 1rem;">
+                            Chercher les Valeurs Direct
+                        </button>
+
+                        <div id="liveMatchesList" class="matches-list" style="margin-top: 1rem;">
+                        </div>
+
+                        <div id="liveAdvice" class="bookie-explanation"
+                            style="display: none; border-color: #ef4444; background: rgba(239, 68, 68, 0.1);">
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js').then(reg => {
+                    console.log('SW registered!', reg);
+                }).catch(err => console.log('SW reg failed', err));
+            });
+        }
+    </script>
+</body>
+
+</html>

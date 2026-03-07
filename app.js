@@ -153,28 +153,28 @@ document.addEventListener('DOMContentLoaded', () => {
             statPromise.then(data => {
                 statResponse.classList.remove('shimmer');
                 statText = data.text;
-                statResponse.innerHTML = `"${formatMarkdown(statText)}"`; // Applied formatMarkdown
+                statResponse.innerHTML = formatMarkdown(statText);
                 updateChat();
             });
 
             expertPromise.then(data => {
                 expertResponse.classList.remove('shimmer');
                 expertText = data.text;
-                expertResponse.innerHTML = `"${formatMarkdown(expertText)}"`; // Applied formatMarkdown
+                expertResponse.innerHTML = formatMarkdown(expertText);
                 updateChat();
             });
 
             pessimistPromise.then(data => {
                 pessimistResponse.classList.remove('shimmer');
                 pessimistText = data.text;
-                pessimistResponse.innerHTML = `"${formatMarkdown(pessimistText)}"`; // Applied formatMarkdown
+                pessimistResponse.innerHTML = formatMarkdown(pessimistText);
                 updateChat();
             });
 
             trendPromise.then(data => {
                 trendResponse.classList.remove('shimmer');
                 trendText = data.text;
-                trendResponse.innerHTML = `"${formatMarkdown(trendText)}"`; // Applied formatMarkdown
+                trendResponse.innerHTML = formatMarkdown(trendText);
                 updateChat();
             }).catch(() => { trendText = "Erreur"; updateChat(); });
 

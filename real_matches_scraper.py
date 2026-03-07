@@ -21,15 +21,15 @@ def convert_american_to_decimal(american_odds):
     except:
         return "-"
 
-def get_the_odds_api_matches(api_key):
+def get_the_odds_api_matches(api_key, force_refresh=False):
     """Fetches matches from The-Odds-API directly if the user provided a key."""
     global _ODDS_API_CACHE
     global CACHE_EXPIRY
     
     # Check cache to strictly respect 500 req / month limit
     current_time = time.time()
-    if current_time - _ODDS_API_CACHE["timestamp"] < CACHE_EXPIRY and _ODDS_API_CACHE["matches"]:
-        print("Returning The-Odds-API matches from 6-hour Cache...")
+    if not force_refresh and current_time - _ODDS_API_CACHE["timestamp"] < CACHE_EXPIRY and _ODDS_API_CACHE["matches"]:
+        print("Returning The-Odds-API matches from 12-hour Cache...")
         return _ODDS_API_CACHE["matches"]
 
     matches = []
@@ -77,6 +77,18 @@ def get_the_odds_api_matches(api_key):
                 away_team = event.get("away_team")
                 date_str = event.get("commence_time")
                 
+                # Critical: Filter matches to only keep today and tomorrow (48h rolling)
+                # The-Odds-API returns months of data otherwise, which hits Gemini's token/rate limits.
+                if date_str:
+                    try:
+                        match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                        now = datetime.now(match_date.tzinfo) if match_date.tzinfo else datetime.utcnow()
+                        delta_hours = (match_date - now).total_seconds() / 3600
+                        if delta_hours > 48 or delta_hours < -12:
+                            continue # Ignore matches too far in the future or history
+                    except:
+                        pass
+                
                 odds_dict = {"1": "-", "N": "-", "2": "-"}
                 bookmakers = event.get("bookmakers", [])
                 
@@ -116,14 +128,14 @@ def get_the_odds_api_matches(api_key):
         
     return matches
 
-def scrape_real_matches(leagues=None):
+def scrape_real_matches(leagues=None, force_refresh=False):
     """
     Scrapes real matches. First attempts The-Odds-API if the key exists (perfect cotes, no Cloudflare).
     If no key or quota exhausted, falls back to the infinite 100% free ESPN API.
     """
     odds_api_key = os.getenv("THE_ODDS_API_KEY")
     if odds_api_key:
-        odds_api_matches = get_the_odds_api_matches(odds_api_key)
+        odds_api_matches = get_the_odds_api_matches(odds_api_key, force_refresh)
         if odds_api_matches:
             return odds_api_matches
             

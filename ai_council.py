@@ -96,7 +96,7 @@ Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
 Renvoie UNIQUEMENT le JSON. Pas de texte.
 """
 
-def fetch_live_web_data():
+def fetch_live_web_data(force_refresh=False):
     """
     Hybrid Scraper:
     1. Gets 100% real matches and odds from ESPN API (Football, NBA, Top 14).
@@ -105,7 +105,7 @@ def fetch_live_web_data():
     matches = []
     # 1. API Direct (ESPN)
     try:
-        espn_matches = scrape_real_matches()
+        espn_matches = scrape_real_matches(leagues=None, force_refresh=force_refresh)
         matches.extend(espn_matches)
     except Exception as e:
         print(f"Error fetching ESPN matches: {e}")

@@ -49,7 +49,8 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
         "basketball_euroleague",
         "tennis_atp",
         "tennis_wta",
-        "icehockey_nhl"
+        "icehockey_nhl",
+        "motorsport_formula_1"
     ]
     
     for sport_key in sports_to_fetch:

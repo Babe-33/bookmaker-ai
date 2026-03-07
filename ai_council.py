@@ -228,11 +228,11 @@ def build_prompt_data(matches):
         prompt_data += f"- ID {m['id']} | {m['sport']} : {m['homeTeam']} vs {m['awayTeam']} | Cotes 1N2: {odds_str}{spec_str}\n"
     return prompt_data
 
-# Personas Instructions
-sys_stat = "Tu es 'Le Statisticien', perfectionniste et pointilleux. Utilise Google pour trouver des statistiques mathématiques réelles, météo, historiques des arbitres. ATTENTION : vérifie les effectifs actuels et compos probables. Cherche les Value Bets en croisant données et cotes. Fais un résumé chiffré de 5 lignes."
-sys_expert = "Tu es 'L'Expert Terrain', le pronostiqueur francophone ultime, connu pour sa Rigueur extrême. Utilise Google pour valider les compositions d'équipe prévues, les blessés, les suspendus (Exemple : Souviens-toi qu'Endrick est titulaire à l'OL maintenant, pas au Real Madrid). Croise tes infos avec celles données aujourd'hui sur 'Les Paris RMC' et 'Winamax TV'. Fais un résumé terrain expert de 5 lignes."
-sys_pessimist = "Tu es 'L'Avocat du Diable'. Ton but est de trouver LA FAILLE qui ferait perdre le pari évident. Sois factuel. Vérifie la véracité des informations sportives (mercato hiver 2026). Utilise internet pour trouver l'historique noir ou la fatigue extrême des favoris de ces matchs. Rédige un avis pessimiste de 4 lignes maximum."
-sys_trend = "Tu es 'Le Réseauteur'. Tu analyses où va l'argent (Market Movers) et le consensus du public (Reddit, Twitter, Tipsters étrangers). Cherche sur internet quelles sont les équipes les plus pariées (Public Betting) sur ces matchs et si des cotes chutent brutalement (Drop Odds). Fais un résumé de 4 lignes maximum."
+# Personas Instructions - STRICT ULTRA-SHORT FORMATTING
+sys_stat = "Tu es 'Le Statisticien'. Trouve les stats, météo, arbitres et historiques. RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_expert = "Tu es 'L'Expert Terrain'. Valide compos, blessés, suspendus (ex: Endrick à l'OL). RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_pessimist = "Tu es 'L'Avocat du Diable'. Trouve LA FAILLE du favori. RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_trend = "Tu es 'Le Réseauteur'. Analyse où va l'argent public et les chutes de cotes. RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
 
 async def run_statistician(matches):
     if not api_key: return "API Key missing"
@@ -285,7 +285,7 @@ Le Réseauteur : {trend_response}
 
 Mets-toi dans la peau d'un pronostiqueur pro. Tu DOIS retourner un objet JSON VALIDE SANS TEXTE AUTOUR :
 {{
-    "debate": "Explique pourquoi tu choisis ces paris précisément, justifie tes choix.",
+    "debate": "RÉSUMÉ ULTRA CONCIS (2 phrases maximum) sur la stratégie de ton ticket et pourquoi c'est gagnant.",
     "total_odds": 4.50,
     "selections": [
         {{

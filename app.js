@@ -35,6 +35,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const unlockBtn = document.getElementById('unlockBtn');
     const securityError = document.getElementById('securityError');
 
+    function formatMarkdown(text) {
+        if (!text) return "";
+        let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        formatted = formatted.replace(/- (.*?)(?=\n|$)/g, '<li>$1</li>');
+        if (formatted.includes('<li>')) {
+            formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        }
+        return formatted.replace(/\n/g, '<br/>');
+    }
+
     unlockBtn.addEventListener('click', () => {
         if (passphraseInput.value.toLowerCase() === 'parions') {
             securityOverlay.style.display = 'none';
@@ -143,28 +153,28 @@ document.addEventListener('DOMContentLoaded', () => {
             statPromise.then(data => {
                 statResponse.classList.remove('shimmer');
                 statText = data.text;
-                statResponse.innerText = `"${statText}"`;
+                statResponse.innerHTML = `"${formatMarkdown(statText)}"`; // Applied formatMarkdown
                 updateChat();
             });
 
             expertPromise.then(data => {
                 expertResponse.classList.remove('shimmer');
                 expertText = data.text;
-                expertResponse.innerText = `"${expertText}"`;
+                expertResponse.innerHTML = `"${formatMarkdown(expertText)}"`; // Applied formatMarkdown
                 updateChat();
             });
 
             pessimistPromise.then(data => {
                 pessimistResponse.classList.remove('shimmer');
                 pessimistText = data.text;
-                pessimistResponse.innerText = `"${pessimistText}"`;
+                pessimistResponse.innerHTML = `"${formatMarkdown(pessimistText)}"`; // Applied formatMarkdown
                 updateChat();
             });
 
             trendPromise.then(data => {
                 trendResponse.classList.remove('shimmer');
                 trendText = data.text;
-                trendResponse.innerText = `"${trendText}"`;
+                trendResponse.innerHTML = `"${formatMarkdown(trendText)}"`; // Applied formatMarkdown
                 updateChat();
             }).catch(() => { trendText = "Erreur"; updateChat(); });
 
@@ -249,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderTicket(ticket) {
-        bookieDebate.innerText = ticket.debate;
+        bookieDebate.innerHTML = formatMarkdown(ticket.debate); // Applied formatMarkdown
         totalOddsValue.innerText = `x ${ticket.total_odds}`;
 
         finalTicketList.innerHTML = '';

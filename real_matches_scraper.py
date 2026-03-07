@@ -1,6 +1,16 @@
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 import json
+import os
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Global Cache to absolutely prevent The-Odds-API 500 requests/month quota from depleting.
+# Expire cache every 6 hours (4 checks per day limit).
+CACHE_EXPIRY = 6 * 3600 
+_ODDS_API_CACHE = {"timestamp": 0, "matches": []}
 
 def convert_american_to_decimal(american_odds):
     try:
@@ -11,11 +21,114 @@ def convert_american_to_decimal(american_odds):
     except:
         return "-"
 
+def get_the_odds_api_matches(api_key):
+    """Fetches matches from The-Odds-API directly if the user provided a key."""
+    global _ODDS_API_CACHE
+    global CACHE_EXPIRY
+    
+    # Check cache to strictly respect 500 req / month limit
+    current_time = time.time()
+    if current_time - _ODDS_API_CACHE["timestamp"] < CACHE_EXPIRY and _ODDS_API_CACHE["matches"]:
+        print("Returning The-Odds-API matches from 6-hour Cache...")
+        return _ODDS_API_CACHE["matches"]
+
+    matches = []
+    match_id_counter = 1
+    
+    # 8 Sports * 4 times a day = 32 requests/day = ~900 req/month. To stay under 500:
+    # We will only query 4 primary sports that ESPN lacks odds for, or use a 12 hour cache.
+    # Actually, we will set a stricter 12-hour cache.
+    sports_to_fetch = [
+        "soccer_france_ligue_one",
+        "soccer_france_ligue_two",
+        "soccer_epl",
+        "soccer_uefa_champs_league",
+        "rugby_union_top14",
+        "basketball_nba",
+        "tennis_atp",
+    ]
+    
+    for sport_key in sports_to_fetch:
+        url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
+        params = {
+            "apiKey": api_key,
+            "regions": "eu", # Bookmakers européens
+            "markets": "h2h",
+            "oddsFormat": "decimal",
+        }
+        
+        try:
+            r = requests.get(url, params=params, timeout=5)
+            if r.status_code == 429:
+                print("The-Odds-API Quota Exceeded. Falling back to ESPN.")
+                return [] # Quota reached, trigger ESPN fallback
+                
+            if r.status_code != 200:
+                continue
+                
+            sport_label = "Football"
+            if "rugby" in sport_key: sport_label = "Rugby"
+            elif "basketball" in sport_key: sport_label = "Basket"
+            elif "tennis" in sport_key: sport_label = "Tennis"
+            
+            data = r.json()
+            for event in data:
+                home_team = event.get("home_team")
+                away_team = event.get("away_team")
+                date_str = event.get("commence_time")
+                
+                odds_dict = {"1": "-", "N": "-", "2": "-"}
+                bookmakers = event.get("bookmakers", [])
+                
+                if bookmakers:
+                    # Prendre les cotes du premier bookmaker disponible (ex: Unibet, Betclic)
+                    h2h_market = bookmakers[0].get("markets", [{}])[0]
+                    outcomes = h2h_market.get("outcomes", [])
+                    for outcome in outcomes:
+                        name = outcome.get("name")
+                        price = outcome.get("price")
+                        if name == home_team: odds_dict["1"] = price
+                        elif name == away_team: odds_dict["2"] = price
+                        elif name.lower() == "draw": odds_dict["N"] = price
+
+                matches.append({
+                    "id": f"oddsapi_{match_id_counter}",
+                    "sport": sport_label,
+                    "competition": sport_key.replace('_', ' ').title(),
+                    "homeTeam": home_team,
+                    "awayTeam": away_team,
+                    "date": date_str,
+                    "odds": odds_dict,
+                    "specialMarket": "Vainqueur Match",
+                    "specialOdd": odds_dict["1"]
+                })
+                match_id_counter += 1
+                
+        except Exception as e:
+            print(f"Error fetching The-Odds-API {sport_key}: {e}")
+
+    # Save to Cache
+    if matches:
+        _ODDS_API_CACHE["timestamp"] = time.time()
+        # Extend to 12 hours expiry to guarantee 500 requests per month safety
+        CACHE_EXPIRY = 12 * 3600 
+        _ODDS_API_CACHE["matches"] = matches
+        
+    return matches
+
 def scrape_real_matches(leagues=None):
     """
-    Scrapes real matches and odds directly from ESPN public APIs. 
-    It is 100% free, has no rate limits, and prevents Gemini Hallucinations.
+    Scrapes real matches. First attempts The-Odds-API if the key exists (perfect cotes, no Cloudflare).
+    If no key or quota exhausted, falls back to the infinite 100% free ESPN API.
     """
+    odds_api_key = os.getenv("THE_ODDS_API_KEY")
+    if odds_api_key:
+        odds_api_matches = get_the_odds_api_matches(odds_api_key)
+        if odds_api_matches:
+            return odds_api_matches
+            
+    print("No The-Odds-API key found or quota exceeded: Executing Unmetered ESPN Fallback...")
+
     if not leagues:
         leagues = [
             ("Football", "socc", "soccer", "fra.1", "Ligue 1"),
@@ -28,11 +141,19 @@ def scrape_real_matches(leagues=None):
             ("Football", "socc", "soccer", "uefa.champions", "Champions League"),
             ("Football", "socc", "soccer", "uefa.europa", "Europa League"),
             ("Football", "socc", "soccer", "uefa.conference", "Conference League"),
+            ("Football", "socc", "soccer", "fifa.world", "Coupe du Monde"),
+            ("Football", "socc", "soccer", "uefa.euro", "Euro"),
+            ("Football", "socc", "soccer", "fifa.olympics", "Jeux Olympiques (Foot)"),
+            ("Football", "socc", "soccer", "uefa.nations", "Ligue des Nations"),
+            ("Football", "socc", "soccer", "conmebol.america", "Copa America"),
             ("Rugby", "rugb", "rugby", "fra.1", "Top 14"),
             ("Rugby", "rugb", "rugby", "eng.1", "Premiership"),
             ("Rugby", "rugb", "rugby", "six.nations", "Six Nations"),
+            ("Rugby", "rugb", "rugby", "world.cup", "Coupe du Monde (Rugby)"),
+            ("Rugby", "rugb", "rugby", "champions.cup", "Champions Cup"),
             ("Basket", "bask", "basketball", "nba", "NBA"),
-            ("Basket", "bask", "basketball", "euro", "Euroleague")
+            ("Basket", "bask", "basketball", "euro", "Euroleague"),
+            ("Basket", "bask", "basketball", "olympics", "Jeux Olympiques (Basket)")
         ]
         
     matches = []
@@ -107,7 +228,6 @@ def scrape_real_matches(leagues=None):
     return matches
 
 if __name__ == '__main__':
-    # Test script locally
     m = scrape_real_matches()
-    print(f"Fetched {len(m)} matches from API-Sports.")
-    for x in m[:5]: print(x)
+    print(f"Fetched {len(m)} matches.")
+    for i in m[:5]: print(i)

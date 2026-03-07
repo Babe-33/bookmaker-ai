@@ -117,7 +117,7 @@ def fetch_live_web_data():
         try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2 (Rugby), la Starligue (Handball) et la Ligue Magnus (Hockey). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers.",
+                contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), la Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
                 config=types.GenerateContentConfig(
                     system_instruction=sys_prompt,
                     temperature=0.0,

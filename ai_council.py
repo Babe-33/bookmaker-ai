@@ -98,65 +98,14 @@ Renvoie UNIQUEMENT le JSON. Pas de texte.
 
 def fetch_live_web_data():
     """
-    Hybrid Scraper:
-    1. Gets 100% real matches and odds from ESPN API (Football, NBA, Top 14).
-    2. Fallbacks to a HIGHLY CONSTRAINED Gemini search strictly for French niche sports (Pro D2, Starligue, Magnus).
+    Scraper: Gets 100% real matches and odds from API-Sports (Football, NBA, Top 14, Pro D2, Starligue).
     """
     matches = []
-    # 1. API Direct (ESPN)
     try:
-        espn_matches = scrape_real_matches()
-        matches.extend(espn_matches)
+        matches = scrape_real_matches()
     except Exception as e:
-        print(f"Error fetching ESPN matches: {e}")
+        print(f"Error fetching API-Sports matches: {e}")
 
-    # 2. Scraper Niche Sport via Gemini (To cover Pro D2, LNH, Magnus...)
-    if api_key:
-        client = genai.Client(api_key=api_key)
-        sys_prompt = get_niche_sports_extractor_prompt()
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2 (Rugby), la Starligue (Handball) et la Ligue Magnus (Hockey). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers.",
-                config=types.GenerateContentConfig(
-                    system_instruction=sys_prompt,
-                    temperature=0.0,
-                    tools=[{"google_search": {}}]
-                ),
-            )
-            
-            raw = response.text
-            if "```json" in raw:
-                raw = raw.split("```json")[1].split("```")[0]
-            elif "```" in raw:
-                raw = raw.split("```")[1].split("```")[0]
-                
-            niche_data = json.loads(raw.strip())
-            niche_matches = niche_data.get("matches", [])
-            
-            # Ensure odds object has 1, N, 2 keys explicitly
-            for nm in niche_matches:
-                if "odds" not in nm or not isinstance(nm["odds"], dict):
-                    nm["odds"] = {"1": "-", "N": "-", "2": "-"}
-                else:
-                    nm["odds"]["1"] = nm["odds"].get("1", nm["odds"].get("home", "-"))
-                    nm["odds"]["N"] = nm["odds"].get("N", nm["odds"].get("draw", "-"))
-                    nm["odds"]["2"] = nm["odds"].get("2", nm["odds"].get("away", "-"))
-
-            matches.extend(niche_matches)
-            
-        except Exception as e:
-            print(f"Error fetching niche sports via Gemini: {e}")
-            # Failsafe statique pour s'assurer que les French Niche Sports s'affichent toujours même si l'API IA sature
-            today_str = datetime.datetime.utcnow().strftime('%Y-%m-%d')
-            matches.extend([
-                {"id": "n1", "sport": "Rugby", "competition": "Pro D2", "homeTeam": "Valence Romans", "awayTeam": "RC Vannes", "date": f"{today_str} 21:00 UTC", "odds": {"1": 1.85, "N": 20.0, "2": 2.15}, "specialMarket": "Vainqueur Match", "specialOdd": 1.85},
-                {"id": "n2", "sport": "Handball", "competition": "Starligue", "homeTeam": "Istres", "awayTeam": "Tremblay", "date": f"{today_str} 20:00 UTC", "odds": {"1": 1.95, "N": 8.0, "2": 2.05}, "specialMarket": "Vainqueur Match", "specialOdd": 1.95},
-                {"id": "n3", "sport": "Hockey", "competition": "Ligue Magnus", "homeTeam": "Bordeaux", "awayTeam": "Marseille", "date": f"{today_str} 20:30 UTC", "odds": {"1": 1.75, "N": 4.5, "2": 3.10}, "specialMarket": "Vainqueur Match", "specialOdd": 1.75},
-                {"id": "n4", "sport": "Hockey", "competition": "Ligue Magnus", "homeTeam": "Anglet", "awayTeam": "Rouen", "date": f"{today_str} 20:30 UTC", "odds": {"1": 4.20, "N": 5.0, "2": 1.45}, "specialMarket": "Vainqueur Match", "specialOdd": 1.45},
-                {"id": "n5", "sport": "Handball", "competition": "Starligue", "homeTeam": "Montpellier", "awayTeam": "PSG", "date": "2026-03-07 20:00 UTC", "odds": {"1": 2.80, "N": 7.5, "2": 1.55}, "specialMarket": "Vainqueur Match", "specialOdd": 1.55}
-            ])
-            
     return matches
 
 def fetch_live_in_play_data():

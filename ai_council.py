@@ -238,25 +238,25 @@ async def run_statistician(matches):
     if not api_key: return "API Key missing"
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_stat, f"Trouve les stats détaillées des matchs suivants:\n{prompt_data}", True)
+    return await asyncio.to_thread(call_persona, client, sys_stat, f"Trouve les stats détaillées des matchs suivants : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", True)
 
 async def run_expert(matches):
     if not api_key: return "API Key missing"
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_expert, f"Trouve les avis de RMC, compos et blessés sur ces matchs:\n{prompt_data}", True)
+    return await asyncio.to_thread(call_persona, client, sys_expert, f"Trouve les avis de RMC, compos et blessés : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", True)
 
 async def run_pessimist(matches):
     if not api_key: return "API Key missing"
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_pessimist, f"Détruis les espoirs des favoris sur ces matchs:\n{prompt_data}", True)
+    return await asyncio.to_thread(call_persona, client, sys_pessimist, f"Détruis les espoirs des favoris sur ces matchs : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", False)
 
 async def run_trend(matches):
     if not api_key: return "API Key missing"
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_trend, f"Quelles sont les grosses tendances de paris et chutes de cotes sur ces matchs:\n{prompt_data}", True)
+    return await asyncio.to_thread(call_persona, client, sys_trend, f"Quelles sont les grosses tendances de paris sur ces matchs : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", True)
 
 async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
     if not api_key: return {"error": "API Key missing"}

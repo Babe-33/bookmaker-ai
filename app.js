@@ -152,28 +152,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
             statPromise.then(data => {
                 statResponse.classList.remove('shimmer');
-                statText = data.text;
+                statText = data?.text || "❌ Analyse indisponible";
                 statResponse.innerHTML = formatMarkdown(statText);
                 updateChat();
-            });
+            }).catch(() => { statText = "Erreur"; updateChat(); });
 
             expertPromise.then(data => {
                 expertResponse.classList.remove('shimmer');
-                expertText = data.text;
+                expertText = data?.text || "❌ Analyse indisponible";
                 expertResponse.innerHTML = formatMarkdown(expertText);
                 updateChat();
-            });
+            }).catch(() => { expertText = "Erreur"; updateChat(); });
 
             pessimistPromise.then(data => {
                 pessimistResponse.classList.remove('shimmer');
-                pessimistText = data.text;
+                pessimistText = data?.text || "❌ Analyse indisponible";
                 pessimistResponse.innerHTML = formatMarkdown(pessimistText);
                 updateChat();
-            });
+            }).catch(() => { pessimistText = "Erreur"; updateChat(); });
 
             trendPromise.then(data => {
                 trendResponse.classList.remove('shimmer');
-                trendText = data.text;
+                trendText = data?.text || "❌ Analyse indisponible";
                 trendResponse.innerHTML = formatMarkdown(trendText);
                 updateChat();
             }).catch(() => { trendText = "Erreur"; updateChat(); });

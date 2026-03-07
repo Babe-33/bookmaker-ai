@@ -44,8 +44,12 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
         "soccer_epl",
         "soccer_uefa_champs_league",
         "rugby_union_top14",
+        "rugby_union_six_nations",
         "basketball_nba",
+        "basketball_euroleague",
         "tennis_atp",
+        "tennis_wta",
+        "icehockey_nhl"
     ]
     
     for sport_key in sports_to_fetch:

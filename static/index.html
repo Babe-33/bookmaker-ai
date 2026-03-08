@@ -62,6 +62,24 @@
                             <button class="filter-btn" data-sport="f1">Meca/Ski</button>
                             <button class="filter-btn" data-sport="other">Autres</button>
                         </div>
+
+                        <!-- Bankroll Dashboard -->
+                        <div class="bankroll-dashboard glass-panel"
+                            style="margin-top: 1rem; display: flex; gap: 1.5rem; justify-content: space-around; padding: 1rem;">
+                            <div class="bankroll-stat">
+                                <span class="stat-label" style="color: #94a3b8; font-size: 0.8rem; display: block;">💰
+                                    Solde Actuel</span>
+                                <span id="bankroll-value" class="stat-value"
+                                    style="font-size: 1.2rem; font-weight: bold; color: #10b981;">-- €</span>
+                            </div>
+                            <div class="bankroll-stat">
+                                <span class="stat-label" style="color: #94a3b8; font-size: 0.8rem; display: block;">📈
+                                    Profit/ROI</span>
+                                <span id="roi-value" class="stat-value"
+                                    style="font-size: 1.2rem; font-weight: bold; color: #f59e0b;">-- %</span>
+                            </div>
+                            <button id="config-bankroll-btn" class="filter-btn" style="padding: 0.5rem;">⚙️</button>
+                        </div>
                     </div>
 
                     <div id="matchesList" class="matches-list">
@@ -159,12 +177,38 @@
 
                         <button id="placeBetBtn" class="btn cta full-width" disabled>Jouer sur Parions Sport</button>
                     </section>
+
+                    <!-- Ticket History -->
+                    <section class="glass-panel" style="margin-top: 2rem;">
+                        <h2 style="margin-bottom: 1rem;">📜 Historique des Tickets</h2>
+                        <div id="historyList" class="history-list"
+                            style="display: flex; flex-direction: column; gap: 1rem; max-height: 400px; overflow-y: auto;">
+                            <div class="empty-state">Aucun historique disponible.</div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </main>
+
+        <!-- Modals -->
+        <div id="bankrollModal" class="modal-overlay"
+            style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+            <div class="glass-panel" style="width: 90%; max-width: 400px; padding: 2rem;">
+                <h3 style="margin-bottom: 1rem;">Configurer Capital</h3>
+                <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 1.5rem;">Entrez votre capital de départ pour
+                    le calcul des mises.</p>
+                <input type="number" id="bankrollInput" placeholder="Montant (ex: 500)"
+                    style="width: 100%; padding: 0.8rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 8px; margin-bottom: 1.5rem;">
+                <div style="display: flex; gap: 1rem;">
+                    <button id="saveBankrollBtn" class="btn cta full-width">Sauvegarder</button>
+                    <button id="closeBankrollBtn" class="btn full-width"
+                        style="background: transparent; border: 1px solid #334155;">Annuler</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/app.js?v=3.7"></script>
+    <script src="/static/app.js?v=3.8"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

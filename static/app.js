@@ -16,6 +16,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatDialogue = document.getElementById('chatDialogue');
     const categoryFilters = document.querySelectorAll('.filter-btn');
 
+    // Bankroll UI
+    const bankrollValue = document.getElementById('bankroll-value');
+    const roiValue = document.getElementById('roi-value');
+    const historyList = document.getElementById('historyList');
+    const configBankrollBtn = document.getElementById('config-bankroll-btn');
+    const bankrollModal = document.getElementById('bankrollModal');
+    const bankrollInput = document.getElementById('bankrollInput');
+    const saveBankrollBtn = document.getElementById('saveBankrollBtn');
+    const closeBankrollBtn = document.getElementById('closeBankrollBtn');
+
     let currentMatches = [];
     let currentFilter = 'all';
 
@@ -66,8 +76,101 @@ document.addEventListener('DOMContentLoaded', () => {
                 runBtn.disabled = false;
             }
         } catch (e) { console.error("Auto-load failed", e); }
+        loadBankroll();
     }
     initMatches();
+
+    // Bankroll Logic
+    async function loadBankroll() {
+        try {
+            const res = await fetch('/api/bankroll');
+            const db = await res.json();
+            updateBankrollUI(db);
+        } catch (e) { console.error("Load bankroll failed", e); }
+    }
+
+    function updateBankrollUI(db) {
+        const { balance, initial_balance } = db.bankroll;
+        bankrollValue.innerText = `${balance.toFixed(2)} €`;
+
+        // Calculate ROI
+        const diff = balance - initial_balance;
+        const roi = (diff / initial_balance) * 100;
+        roiValue.innerText = `${roi > 0 ? '+' : ''}${roi.toFixed(1)} %`;
+        roiValue.style.color = roi >= 0 ? '#10b981' : '#ef4444';
+
+        renderHistory(db.history);
+    }
+
+    function renderHistory(history) {
+        if (!history || history.length === 0) {
+            historyList.innerHTML = '<div class="empty-state">Aucun historique disponible.</div>';
+            return;
+        }
+        historyList.innerHTML = '';
+        history.forEach(t => {
+            const div = document.createElement('div');
+            div.className = `glass-panel history-item status-${t.status}`;
+            div.style.padding = '1rem';
+            div.style.borderLeft = `4px solid ${t.status === 'won' ? '#10b981' : (t.status === 'lost' ? '#ef4444' : '#64748b')}`;
+
+            let actionHtml = '';
+            if (t.status === 'pending') {
+                actionHtml = `
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button class="btn won-btn" style="background: #10b981; padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="handleTicketAction('${t.id}', 'won')">Gagné</button>
+                        <button class="btn lost-btn" style="background: #ef4444; padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="handleTicketAction('${t.id}', 'lost')">Perdu</button>
+                        <button class="btn" style="background: #334155; padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="handleTicketAction('${t.id}', 'delete')">🗑️</button>
+                    </div>
+                `;
+            } else {
+                actionHtml = `<button class="btn" style="background: transparent; border: 1px solid #334155; padding: 0.3rem 0.6rem; font-size: 0.7rem; margin-top: 1rem;" onclick="handleTicketAction('${t.id}', 'delete')">Supprimer</button>`;
+            }
+
+            div.innerHTML = `
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.5rem;">Ticket du ${new Date(t.created_at).toLocaleDateString()} - Stake: ${t.suggested_stake_value || 0} €</div>
+                <div style="font-weight: bold; font-size: 0.9rem;">Cote Totale: x${t.total_odds}</div>
+                <div style="font-size: 0.85rem; margin-top: 0.5rem;">${t.selections.map(s => `• ${s.match_name}: ${s.prediction}`).join('<br>')}</div>
+                ${actionHtml}
+            `;
+            historyList.appendChild(div);
+        });
+    }
+
+    window.handleTicketAction = async (id, action) => {
+        try {
+            const res = await fetch('/api/ticket/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticket_id: id, action })
+            });
+            const db = await res.json();
+            updateBankrollUI(db);
+        } catch (e) { console.error("Ticket action failed", e); }
+    };
+
+    configBankrollBtn.addEventListener('click', () => {
+        bankrollModal.style.display = 'flex';
+    });
+
+    closeBankrollBtn.addEventListener('click', () => {
+        bankrollModal.style.display = 'none';
+    });
+
+    saveBankrollBtn.addEventListener('click', async () => {
+        const val = parseFloat(bankrollInput.value);
+        if (isNaN(val)) return;
+        try {
+            const res = await fetch('/api/bankroll/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_balance: val })
+            });
+            const db = await res.json();
+            updateBankrollUI(db);
+            bankrollModal.style.display = 'none';
+        } catch (e) { console.error("Save bankroll failed", e); }
+    });
 
     // 1. Fetch Matches
     fetchBtn.addEventListener('click', async () => {
@@ -198,19 +301,42 @@ document.addEventListener('DOMContentLoaded', () => {
         bookieDebate.innerHTML = formatMarkdown(ticket.debate);
         totalOddsValue.innerText = `x ${ticket.total_odds}`;
         finalTicketList.innerHTML = '';
+
+        // Add Staking Info
+        if (ticket.suggested_stake_percent) {
+            const stakeDiv = document.createElement('div');
+            stakeDiv.style = "background: rgba(16, 185, 129, 0.1); border: 1px dashed #10b981; padding: 0.8rem; border-radius: 8px; margin-bottom: 1rem; color: #10b981; font-weight: bold; text-align: center;";
+            stakeDiv.innerHTML = `💰 Mise suggérée : ${ticket.suggested_stake_percent} (${ticket.suggested_stake_value} €)`;
+            finalTicketList.appendChild(stakeDiv);
+        }
+
         ticket.selections.forEach(item => {
             const div = document.createElement('div');
             div.className = 'ticket-item';
             div.innerHTML = `
                 <div class="ticket-match">
                     <div class="ticket-match-name">${item.match_name}</div>
-                    <div class="ticket-prediction">Pari : ${item.prediction}</div>
+                    <div class="ticket-prediction">Pari : ${item.prediction} ${item.confidence ? `<span class="conf-pill">${item.confidence}</span>` : ''}</div>
                 </div>
                 <div class="ticket-odd">${item.odds}</div>
             `;
             finalTicketList.appendChild(div);
         });
+
+        // Save to history automatically
+        saveTicketToHistory(ticket);
         placeBetBtn.disabled = false;
+    }
+
+    async function saveTicketToHistory(ticket) {
+        try {
+            await fetch('/api/ticket/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ticket)
+            });
+            loadBankroll(); // Refresh history
+        } catch (e) { console.error("Save ticket failed", e); }
     }
 
     function addChatBubble(name, text) {

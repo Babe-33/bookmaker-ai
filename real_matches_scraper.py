@@ -43,7 +43,11 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
         "soccer_france_ligue_two",
         "soccer_epl",
         "soccer_uefa_champs_league",
-        "rugby_union_top14",
+        "soccer_germany_bundesliga",
+        "soccer_netherlands_eredivisie",
+        "soccer_portugal_primeira_liga",
+        "rugby_union_top_14",
+        "rugby_union_pro_d2",
         "rugby_union_six_nations",
         "basketball_nba",
         "basketball_euroleague",
@@ -58,8 +62,8 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
         url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
         params = {
             "apiKey": api_key,
-            "regions": "eu", # Bookmakers européens
-            "markets": "h2h",
+            "regions": "eu", # Bookmakers européens (Unibet, Betclic, Winamax, etc.)
+            "markets": "h2h,btts,totals,double_chance,spreads", # All major markets
             "oddsFormat": "decimal",
         }
         
@@ -100,34 +104,81 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
                         match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
                         now = datetime.now(match_date.tzinfo) if match_date.tzinfo else datetime.utcnow()
                         delta_hours = (match_date - now).total_seconds() / 3600
-                        if delta_hours > 48 or delta_hours < -12:
-                            continue # Ignore matches too far in the future or history
+                        # STRICT: Only 72h future and 12h past. Discard June 2026.
+                        if delta_hours > 72 or delta_hours < -12:
+                            continue 
                     except:
                         pass
                 
-                odds_dict = {"1": "-", "N": "-", "2": "-"}
-                bookmakers = event.get("bookmakers", [])
+                # OPTIMIZATION: Max Odds Logic
+                # Instead of taking the first bookmaker, we parse ALL of them to find the highest price for each bet.
+                odds_dict = {"1": 0.0, "N": 0.0, "2": 0.0}
+                advanced_markets = {
+                    "btts": 0.0, 
+                    "over25": 0.0, 
+                    "dc1x": 0.0, 
+                    "dc12": 0.0, 
+                    "dcx2": 0.0,
+                    "h_minus_1": 0.0,
+                    "a_plus_1": 0.0
+                }
                 
-                if bookmakers:
-                    # Prendre les cotes du premier bookmaker disponible (ex: Unibet, Betclic)
-                    h2h_market = bookmakers[0].get("markets", [{}])[0]
-                    outcomes = h2h_market.get("outcomes", [])
-                    for outcome in outcomes:
-                        name = outcome.get("name")
-                        price = outcome.get("price")
-                        if name == home_team: odds_dict["1"] = price
-                        elif name == away_team: odds_dict["2"] = price
-                        elif name.lower() == "draw": odds_dict["N"] = price
+                bookmakers = event.get("bookmakers", [])
+                for bm in bookmakers:
+                    for market in bm.get("markets", []):
+                        m_key = market.get("key")
+                        outcomes = market.get("outcomes", [])
+                        
+                        if m_key == "h2h":
+                            for outcome in outcomes:
+                                name = outcome.get("name")
+                                price = outcome.get("price")
+                                if name == home_team: odds_dict["1"] = max(odds_dict["1"], price)
+                                elif name == away_team: odds_dict["2"] = max(odds_dict["2"], price)
+                                elif name.lower() == "draw": odds_dict["N"] = max(odds_dict["N"], price)
+                        
+                        elif m_key == "btts":
+                            for outcome in outcomes:
+                                if outcome.get("name").lower() == "yes":
+                                    advanced_markets["btts"] = max(advanced_markets["btts"], outcome.get("price"))
+                                    
+                        elif m_key == "totals":
+                            for outcome in outcomes:
+                                if outcome.get("name").lower() == "over" and outcome.get("point") == 2.5:
+                                    advanced_markets["over25"] = max(advanced_markets["over25"], outcome.get("price"))
+
+                        elif m_key == "double_chance":
+                            for outcome in outcomes:
+                                n = outcome.get("name").lower()
+                                p = outcome.get("price")
+                                if "home" in n and "draw" in n: advanced_markets["dc1x"] = max(advanced_markets["dc1x"], p)
+                                elif "home" in n and "away" in n: advanced_markets["dc12"] = max(advanced_markets["dc12"], p)
+                                elif "draw" in n and "away" in n: advanced_markets["dcx2"] = max(advanced_markets["dcx2"], p)
+
+                        elif m_key == "spreads":
+                            for outcome in outcomes:
+                                p = outcome.get("price")
+                                pt = outcome.get("point")
+                                if outcome.get("name") == home_team and pt == -1.5: advanced_markets["h_minus_1"] = max(advanced_markets["h_minus_1"], p)
+                                elif outcome.get("name") == away_team and pt == 1.5: advanced_markets["a_plus_1"] = max(advanced_markets["a_plus_1"], p)
+
+                # Convert 0.0 to "-" for clean UI/AI interaction
+                for k in odds_dict: 
+                    if odds_dict[k] == 0.0: odds_dict[k] = "-"
+                for k in advanced_markets:
+                    if advanced_markets[k] == 0.0: advanced_markets[k] = "-"
+                
+                odds_dict.update(advanced_markets) 
 
                 matches.append({
                     "id": f"oddsapi_{match_id_counter}",
                     "sport": sport_label,
-                    "competition": sport_key.replace('_', ' ').title(),
+                    "competition": sport_key.replace('_', ' ').replace('soccer ', '').title(),
                     "homeTeam": home_team,
                     "awayTeam": away_team,
                     "date": date_str,
                     "odds": odds_dict,
-                    "specialMarket": "Vainqueur Match",
+                    "specialMarket": "Vainqueur Match (Optimisé)",
                     "specialOdd": odds_dict["1"]
                 })
                 match_id_counter += 1
@@ -166,6 +217,9 @@ def scrape_real_matches(leagues=None, force_refresh=False):
             ("Football", "socc", "soccer", "esp.1", "LaLiga"),
             ("Football", "socc", "soccer", "ita.1", "Serie A"),
             ("Football", "socc", "soccer", "ger.1", "Bundesliga"),
+            ("Football", "socc", "soccer", "ned.1", "Eredivisie"),
+            ("Football", "socc", "soccer", "por.1", "Liga Portugal"),
+            ("Football", "socc", "soccer", "fra.cup", "Coupe de France"),
             ("Football", "socc", "soccer", "uefa.champions", "Champions League"),
             ("Football", "socc", "soccer", "uefa.europa", "Europa League"),
             ("Football", "socc", "soccer", "uefa.conference", "Conference League"),
@@ -175,6 +229,7 @@ def scrape_real_matches(leagues=None, force_refresh=False):
             ("Football", "socc", "soccer", "uefa.nations", "Ligue des Nations"),
             ("Football", "socc", "soccer", "conmebol.america", "Copa America"),
             ("Rugby", "rugb", "rugby", "fra.1", "Top 14"),
+            ("Rugby", "rugb", "rugby", "fra.2", "Pro D2"),
             ("Rugby", "rugb", "rugby", "eng.1", "Premiership"),
             ("Rugby", "rugb", "rugby", "six.nations", "Six Nations"),
             ("Rugby", "rugb", "rugby", "world.cup", "Coupe du Monde (Rugby)"),

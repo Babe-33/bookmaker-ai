@@ -188,22 +188,6 @@ def call_persona(client, system_prompt, match_data, use_search=False):
     if not client:
         return "Pas de clé API."
 
-    config_kwargs = {
-        "system_instruction": system_prompt,
-        "temperature": 0.5,
-    }
-
-    if use_search:
-        config_kwargs["tools"] = [{"google_search": {}}]
-
-def call_persona(client, system_prompt, match_data, use_search=False):
-    if not client:
-        return "Pas de clé API."
-
-    config_kwargs = {
-        "system_instruction": system_prompt,
-        "temperature": 0.5,
-    }
     if use_search:
         config_kwargs["tools"] = [{"google_search": {}}]
 
@@ -221,18 +205,22 @@ def call_persona(client, system_prompt, match_data, use_search=False):
         return f"Erreur IA : {err_msg[:50]}..."
 
 def build_prompt_data(matches):
-    prompt_data = "Matchs et cotes disponibles ce soir :\n"
+    prompt_data = "Matchs et MEILLEURES cotes du marché (MAX ODDS) :\n"
     for m in matches:
-        odds_str = f"1: {m['odds'].get('1', '-')} / N: {m['odds'].get('N', '-')} / 2: {m['odds'].get('2', '-')}"
+        odds = m.get('odds', {})
+        odds_str = f"1: {odds.get('1', '-')} / N: {odds.get('N', '-')} / 2: {odds.get('2', '-')}"
+        adv_str = f" | BTTS: {odds.get('btts', '-')} | Over 2.5: {odds.get('over25', '-')}"
+        dc_str = f" | Double Chance (1X: {odds.get('dc1x', '-')}, 12: {odds.get('dc12', '-')}, X2: {odds.get('dcx2', '-')})"
+        h_str = f" | Handicap (Dom -1: {odds.get('h_minus_1', '-')}, Ext +1: {odds.get('a_plus_1', '-')})"
         spec_str = f" | Pari Spécial: {m.get('specialMarket', 'Aucun')} à {m.get('specialOdd', '-')}"
-        prompt_data += f"- ID {m['id']} | {m['sport']} : {m['homeTeam']} vs {m['awayTeam']} | Cotes 1N2: {odds_str}{spec_str}\n"
+        prompt_data += f"- ID {m['id']} | {m['sport']} ({m['competition']}) : {m['homeTeam']} vs {m['awayTeam']} | Cotes: {odds_str}{adv_str}{dc_str}{h_str}{spec_str}\n"
     return prompt_data
 
-# Personas Instructions - STRICT ULTRA-SHORT FORMATTING
-sys_stat = "Tu es 'Le Statisticien'. Trouve les stats, météo, arbitres et historiques. RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
-sys_expert = "Tu es 'L'Expert Terrain'. Valide compos, blessés, suspendus (ex: Endrick à l'OL). RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
-sys_pessimist = "Tu es 'L'Avocat du Diable'. Trouve LA FAILLE du favori. RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
-sys_trend = "Tu es 'Le Réseauteur'. Analyse où va l'argent public et les chutes de cotes. RÈGLE ABSOLUE DE FORMATAGE POUR CHAQUE MATCH : Tu DOIS répondre uniquement par 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+# Personas Instructions - DEEP ANALYSIS
+sys_stat = "Tu es 'Le Statisticien'. Trouve les stats récentes (5 derniers matchs), historique H2H, et probabilités de buts (Over 2.5, BTTS). RÈGLE : Analyse tactique basée sur les chiffres. RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_expert = "Tu es 'L'Expert Terrain'. Analyse la forme actuelle, les compos probables, blessés et l'enjeu psychologique (Maintien, Titre). Focalise-toi sur le contenu du jeu. RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_pessimist = "Tu es 'L'Avocat du Diable'. Trouve pourquoi le favori va se rater ou pourquoi le match sera un piège (fatigue, match suivant en Europe). RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_trend = "Tu es 'Le Réseauteur'. Analyse les flux de paris mondiaux et les infos de 'vestiaire' ou expert (RMC, L'Equipe). RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
 
 async def run_statistician(matches):
     if not api_key: return "API Key missing"
@@ -275,9 +263,11 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
 
     # 5. Moi (Le Bookmaker / ticket final)
     sys_bookie = f"""Tu es l'Expert Bookmaker de l'équipe, ton seul objectif est la RENTABILITE. Ta mission est de proposer les paris LES PLUS SURS OU LES MIEUX VALORISES parmi la liste.
-IMPORTANT : IL N'Y A PLUS D'OBLIGATION D'Avoir UNE COTE x4. Si le meilleur pari du jour est un Single à 1.50, propose-le. Si c'est un combiné de 2 matchs ultra-sécurisés, propose-le. Si tu sens un gros coup justifié à 8.00, propose-le.
+IMPORTANT : Tu es un chasseur de 'Value' (Value Hunter). Ta mission est de comparer la probabilité réelle du match avec les MEILLEURES COTES proposées. 
+Si une équipe a 60% de chances de gagner mais une cote à 2.00, c'est une VALUE énorme. Propose des paris 1N2, mais n'hésite pas à utiliser le 'Double Chance' pour sécuriser ou les 'Plus de 2.5 buts'.
+RÈGLE : Si tu trouves un pari avec une espérance de gain positive, signale-le comme 'VALUE DETECTED'.
 Priorise la fiabilité. Prends en compte toutes les compositions, stats joueurs (buteurs, etc.).
-Voici les avis de tes 4 experts ayant fait des recherches web :
+Voici les avis de tes 4 experts ayant fait des recherches web approfondies :
 Statisticien : {stat_response}
 Expert Terrain : {expert_response}
 Avocat du Diable : {pessimist_response}

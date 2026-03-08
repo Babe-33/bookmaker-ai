@@ -10,7 +10,7 @@
     <title>Bookmaker AI - Le Conseil</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=3.5">
+    <link rel="stylesheet" href="/static/style.css?v=3.6">
 </head>
 
 <body class="dark-theme">
@@ -25,7 +25,6 @@
         <p id="securityError" style="color: #ef4444; margin-top: 1rem; display: none;">Phrase incorrecte.</p>
     </div>
 
-    <!-- Decorative Abstract Shapes handled globally by CSS now -->
     <div class="app-container">
         <!-- Header -->
         <header>
@@ -41,7 +40,7 @@
         <main>
             <!-- Control Panel -->
             <section class="controls glass-panel">
-                <button id="fetchMatchesBtn" class="btn primary">🌍 1. Importer les Matchs Mondiaux</button>
+                <button id="fetchMatchesBtn" class="btn magic">🌍 1. Importer les Matchs Mondiaux</button>
                 <button id="runCouncilBtn" class="btn magic" disabled>⚡ 2. Lancer l'Analyse Quantique IA</button>
             </section>
 
@@ -59,7 +58,7 @@
                             <button class="filter-btn" data-sport="rugby">Rugby</button>
                             <button class="filter-btn" data-sport="basket">NBA</button>
                             <button class="filter-btn" data-sport="tennis">Tennis</button>
-                            <button class="filter-btn" data-sport="other">Autres (Hockey, Cyclisme...)</button>
+                            <button class="filter-btn" data-sport="other">Autres</button>
                         </div>
                     </div>
 
@@ -126,7 +125,7 @@
                         </div>
                     </section>
 
-                    <!-- NEW: Expandable Chat Dialogue -->
+                    <!-- Expandable Chat Dialogue -->
                     <section class="glass-panel" style="margin-bottom: 2rem; border-color: #8b5cf6;">
                         <details style="cursor: pointer;">
                             <summary
@@ -135,7 +134,6 @@
                             </summary>
                             <div id="chatDialogue"
                                 style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
-                                <!-- Chat bubbles will be injected here -->
                                 <div style="color: #94a3b8; font-style: italic; font-size: 0.9rem;">En attente de
                                     l'analyse...</div>
                             </div>
@@ -159,28 +157,12 @@
 
                         <button id="placeBetBtn" class="btn cta full-width" disabled>Jouer sur Parions Sport</button>
                     </section>
-
-                    <!-- NEW: Live Betting Section -->
-                    <section class="live-section glass-panel" style="margin-top: 2rem; border-color: #ef4444;">
-                        <h2 style="color: #ef4444;">🔴 Paris en Direct (In-Play)</h2>
-                        <button id="liveMatchBtn" class="btn cta full-width"
-                            style="background-color: #ef4444; font-size: 0.9rem; padding: 0.5rem; margin-bottom: 1rem;">
-                            Chercher les Valeurs Direct
-                        </button>
-
-                        <div id="liveMatchesList" class="matches-list" style="margin-top: 1rem;">
-                        </div>
-
-                        <div id="liveAdvice" class="bookie-explanation"
-                            style="display: none; border-color: #ef4444; background: rgba(239, 68, 68, 0.1);">
-                        </div>
-                    </section>
                 </div>
             </div>
         </main>
     </div>
 
-    <script src="/static/app.js?v=3.5"></script>
+    <script src="/static/app.js?v=3.6"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -191,6 +173,5 @@
         }
     </script>
 </body>
-
 
 </html>

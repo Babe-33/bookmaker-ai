@@ -155,7 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ? matches
             : matches.filter(m => {
                 const s = m.sport.toLowerCase();
-                if (currentFilter === 'other') return !['football', 'rugby', 'basket', 'hockey', 'f1', 'biathlon', 'tennis'].includes(s);
+                if (currentFilter === 'other') return !['football', 'rugby', 'basket', 'hockey', 'f1', 'biathlon', 'tennis'].some(k => s.includes(k));
+                if (currentFilter === 'basket') return s.includes('basket') || s.includes('nba');
+                if (currentFilter === 'hockey') return s.includes('hockey') || s.includes('nhl');
                 return s.includes(currentFilter);
             });
 

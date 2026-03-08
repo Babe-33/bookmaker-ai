@@ -251,7 +251,8 @@ header::after {
     transition: all 0.2s ease;
     cursor: pointer;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+    min-height: 100px;
 }
 
 .match-item:hover {
@@ -291,13 +292,16 @@ header::after {
     font-weight: 700;
     margin-bottom: 0.75rem;
     font-size: 1.1rem;
-    color: #fff;
+    color: #ffffff !important;
+    display: block !important;
 }
 
 .match-odds {
-    display: flex;
+    display: flex !important;
     gap: 0.5rem;
     font-size: 0.9rem;
+    visibility: visible !important;
+}
 }
 
 .odd-btn {

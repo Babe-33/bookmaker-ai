@@ -175,14 +175,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (match.odds["N"] && match.odds["N"] !== "-") oddsHtml += `<div class="odd-btn">N: ${match.odds["N"]}</div>`;
             if (match.odds["2"] && match.odds["2"] !== "-") oddsHtml += `<div class="odd-btn">2: ${match.odds["2"]}</div>`;
 
+            let advHtml = '';
+            if (match.odds["btts"] && match.odds["btts"] !== "-") advHtml += `<span class="adv-badge">BTTS: ${match.odds["btts"]}</span>`;
+            if (match.odds["over25"] && match.odds["over25"] !== "-") advHtml += `<span class="adv-badge">+2.5: ${match.odds["over25"]}</span>`;
+
             div.innerHTML = `
                 <div class="match-header">
                     <span class="sport-badge">${match.sport}</span>
+                    <span class="best-odds-badge">✨ Meilleure Cote</span>
                     <span>${match.competition}</span>
                     <span>${formatDate(match.date)}</span>
                 </div>
                 <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
                 <div class="match-odds">${oddsHtml}</div>
+                <div class="match-advanced" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; font-size: 0.8rem; color: #94a3b8;">${advHtml}</div>
             `;
             matchesList.appendChild(div);
         });

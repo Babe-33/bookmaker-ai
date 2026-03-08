@@ -302,6 +302,32 @@ header::after {
     font-size: 0.9rem;
     visibility: visible !important;
 }
+
+.match-advanced {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.best-odds-badge {
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.adv-badge {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 .odd-btn {

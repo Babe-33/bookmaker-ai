@@ -217,10 +217,27 @@ def build_prompt_data(matches):
     return prompt_data
 
 # Personas Instructions - DEEP ANALYSIS
-sys_stat = "Tu es 'Le Statisticien'. Trouve les stats récentes (5 derniers matchs), historique H2H, et probabilités de buts (Over 2.5, BTTS). RÈGLE : Analyse tactique basée sur les chiffres. RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
-sys_expert = "Tu es 'L'Expert Terrain'. Analyse la forme actuelle, les compos probables, blessés et l'enjeu psychologique (Maintien, Titre). Focalise-toi sur le contenu du jeu. RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
-sys_pessimist = "Tu es 'L'Avocat du Diable'. Trouve pourquoi le favori va se rater ou pourquoi le match sera un piège (fatigue, match suivant en Europe). RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
-sys_trend = "Tu es 'Le Réseauteur'. Analyse les flux de paris mondiaux et les infos de 'vestiaire' ou expert (RMC, L'Equipe). RÈGLE DE FORMATAGE : 1 courte phrase de conclusion et 1 seul tiret '- ' d'explication. PAS DE PARAGRAPHE."
+sys_stat = """Tu es 'Le Statisticien'. Trouve les stats récentes (5 derniers matchs), historique H2H, et probabilités de buts (Over 2.5, BTTS). 
+RÈGLE : Analyse tactique basée sur les chiffres et les probabilités mathématiques.
+RÈGLE DE FORMATAGE : Pour chaque match, donne :
+1. ANALYSE (1-2 phrases)
+2. NOTE DE CONFIANCE (X/10)"""
+
+sys_expert = """Tu es 'L'Expert Terrain'. Analyse la forme actuelle, les compos probables, blessés et l'enjeu psychologique (Maintien, Titre). 
+Focalise-toi sur le contenu du jeu et les "infos insiders" (L'Equipe, RMC).
+RÈGLE DE FORMATAGE : Pour chaque match, donne :
+1. ANALYSE (1-2 phrases)
+2. NOTE DE CONFIANCE (X/10)"""
+
+sys_pessimist = """Tu es 'L'Avocat du Diable'. Trouve pourquoi le favori va se rater ou pourquoi le match sera un piège (fatigue, match suivant en Europe).
+RÈGLE DE FORMATAGE : Pour chaque match, donne :
+1. ANALYSE (1-2 phrases)
+2. NOTE DE CONFIANCE (X/10)"""
+
+sys_trend = """Tu es 'Le Réseauteur'. Analyse les flux de paris mondiaux, les chutes de cotes et les tendances climatiques ou d'arbitrage.
+RÈGLE DE FORMATAGE : Pour chaque match, donne :
+1. ANALYSE (1-2 phrases)
+2. NOTE DE CONFIANCE (X/10)"""
 
 async def run_statistician(matches):
     if not api_key: return "API Key missing"
@@ -262,27 +279,42 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
         )
 
     # 5. Moi (Le Bookmaker / ticket final)
-    sys_bookie = f"""Tu es l'Expert Bookmaker de l'équipe, ton seul objectif est la RENTABILITE. Ta mission est de proposer les paris LES PLUS SURS OU LES MIEUX VALORISES parmi la liste.
-IMPORTANT : Tu es un chasseur de 'Value' (Value Hunter). Ta mission est de comparer la probabilité réelle du match avec les MEILLEURES COTES proposées. 
-Si une équipe a 60% de chances de gagner mais une cote à 2.00, c'est une VALUE énorme. Propose des paris 1N2, mais n'hésite pas à utiliser le 'Double Chance' pour sécuriser ou les 'Plus de 2.5 buts'.
-RÈGLE : Si tu trouves un pari avec une espérance de gain positive, signale-le comme 'VALUE DETECTED'.
-Priorise la fiabilité. Prends en compte toutes les compositions, stats joueurs (buteurs, etc.).
-Voici les avis de tes 4 experts ayant fait des recherches web approfondies :
+    # Load bankroll for localized staking
+    db = {"bankroll": {"balance": 100.0}}
+    try:
+        with open("database.json", "r") as f: db = json.load(f)
+    except: pass
+    balance = db["bankroll"]["balance"]
+
+    sys_bookie = f"""Tu es l'Expert Bookmaker, ton unique but est la RENTABILITÉ MAXIMALE. 
+Ta mission : Créer le ticket parfait en utilisant toutes les données des experts.
+TON CAPITAL ACTUEL : {balance}€
+
+RÈGLES D'OR :
+1. CHASSEUR DE VALUE : Compare la probabilité réelle avec les MAX ODDS.
+2. SAME GAME PARLAY (SGP) : Autorisé sur le même match.
+3. STAKING (KELLY CRITERION) : Suggère une mise en % du capital et en valeur (€) basée sur (Confiance vs Cote).
+4. CONFIDENCE : Score unanime > 7/10 uniquement.
+
+Expertise reçue :
 Statisticien : {stat_response}
 Expert Terrain : {expert_response}
 Avocat du Diable : {pessimist_response}
 Le Réseauteur : {trend_response}
 
-Mets-toi dans la peau d'un pronostiqueur pro. Tu DOIS retourner un objet JSON VALIDE SANS TEXTE AUTOUR :
+Retourne UN JSON :
 {{
-    "debate": "RÉSUMÉ ULTRA CONCIS (2 phrases maximum) sur la stratégie de ton ticket et pourquoi c'est gagnant.",
-    "total_odds": 4.50,
+    "debate": "Résumé tactique.",
+    "total_odds": 5.42,
+    "suggested_stake_percent": "5%",
+    "suggested_stake_value": 12.5,
     "selections": [
         {{
-            "match_id": "1",
-            "match_name": "Equipe A vs Equipe B",
-            "prediction": "Victoire A ou Buteur X",
-            "odds": 1.80
+            "match_id": "ID",
+            "match_name": "Team A vs Team B",
+            "prediction": "Victoire A",
+            "odds": 2.10,
+            "confidence": "9/10"
         }}
     ]
 }}

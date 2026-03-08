@@ -339,21 +339,3 @@ async def run_ai_council(matches):
     """Legacy wrapper for backwards compat."""
     return await run_bookmaker(matches)
 
-
-
-def run_live_council(matches):
-    """Analyzes IN-PLAY matches to find immediate betting opportunities."""
-    if not api_key or not matches:
-        return {"advice": "Aucun match en direct analysable."}
-        
-    client = genai.Client(api_key=api_key)
-    prompt_data = "Matchs en cours de jeu :\n"
-    for m in matches:
-        prompt_data += f"- {m['homeTeam']} vs {m['awayTeam']} | Score: {m['score']} à la {m['time']} | Contexte: {m['live_context']} | Pari Suggéré: {m['suggested_bet']} @ {m['estimated_odd']}\n"
-        
-    sys_live = """Tu es un expert en 'Live Betting' (Paris en direct). Regarde très attentivement le score et le temps restant des matchs proposés. 
-Choisis le pari en direct le plus judicieux ("Value Bet").
-Rédige une courte analyse pour alerter l'utilisateur de l'opportunité à saisir MAINTENANT. Ne renvoie que ton texte d'analyse."""
-
-    return {"advice": call_persona(client, sys_live, prompt_data, use_search=False)}
-

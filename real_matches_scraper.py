@@ -50,7 +50,8 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
         "tennis_atp",
         "tennis_wta",
         "icehockey_nhl",
-        "motorsport_formula_1"
+        "motorsport_formula_1",
+        "winter_sports_biathlon"
     ]
     
     for sport_key in sports_to_fetch:
@@ -71,16 +72,26 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
             if r.status_code != 200:
                 continue
                 
-            sport_label = "Football"
-            if "rugby" in sport_key: sport_label = "Rugby"
-            elif "basketball" in sport_key: sport_label = "Basket"
+            sport_label = "Autres"
+            if "soccer" in sport_key: sport_label = "Football"
+            elif "rugby" in sport_key: sport_label = "Rugby"
+            elif "basketball" in sport_key or "nba" in sport_key: sport_label = "Basket"
             elif "tennis" in sport_key: sport_label = "Tennis"
+            elif "icehockey" in sport_key or "nhl" in sport_key: sport_label = "Hockey"
+            elif "motorsport" in sport_key or "formula" in sport_key: sport_label = "F1"
+            elif "biathlon" in sport_key: sport_label = "Biathlon"
             
             data = r.json()
+            if not isinstance(data, list): continue
+            
             for event in data:
                 home_team = event.get("home_team")
                 away_team = event.get("away_team")
                 date_str = event.get("commence_time")
+                
+                # Cleanup names (remove known fake data patterns)
+                if not home_team or not away_team: continue
+                if "Mexico" in home_team and "South Africa" in away_team: continue # Ignore the fake match artifact reported by user
                 
                 # Critical: Filter matches to only keep today and tomorrow (48h rolling)
                 # The-Odds-API returns months of data otherwise, which hits Gemini's token/rate limits.

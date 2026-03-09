@@ -247,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
             runBtn.innerText = '✅ Analyse Terminée';
         } catch (error) {
             console.error(error);
-            runBtn.innerText = '❌ Erreur IA';
+            runBtn.innerText = '❌ Erreur IA (Réessayer)';
             runBtn.disabled = false;
         }
     });

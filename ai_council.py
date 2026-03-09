@@ -116,7 +116,7 @@ def fetch_live_web_data(force_refresh=False):
         sys_prompt = get_niche_sports_extractor_prompt()
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), la Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
                 config=types.GenerateContentConfig(
                     system_instruction=sys_prompt,
@@ -167,7 +167,7 @@ def fetch_live_in_play_data():
     client = genai.Client(api_key=api_key)
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents="Quels sont les matchs de sport intéressants actuellement en direct (live score) avec des cotes potentiellement rentables ?",
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_LIVE_EXTRACTOR,
@@ -188,12 +188,17 @@ def call_persona(client, system_prompt, match_data, use_search=False):
     if not client:
         return "Pas de clé API."
 
+    config_kwargs = {
+        "system_instruction": system_prompt,
+        "temperature": 0.2,
+    }
+
     if use_search:
         config_kwargs["tools"] = [{"google_search": {}}]
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash", # Using 2.0-flash as 2.5 is not yet public
             contents=match_data,
             config=types.GenerateContentConfig(**config_kwargs),
         )

@@ -1,7 +1,7 @@
 import os
 import json
 import asyncio
-import datetime
+from datetime import datetime, timezone
 from real_matches_scraper import scrape_real_matches
 from google import genai
 from google.genai import types
@@ -11,7 +11,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 def get_base_extractor_prompt():
-    today = datetime.datetime.now().strftime("%A %d %B %Y")
+    today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
     return f"""
 Tu es un extracteur de données sportives en temps réel EXTRÊMEMENT RIGOUREUX. Navigue sur internet pour trouver les VRAIS événements sportifs prévus EXACTEMENT pour aujourd'hui ({today}) ou ce week-end.
 CRITIQUE ET IMPÉRATIF : Tu as l'interdiction ABSOLUE d'inventer des matchs. Tu dois vérifier le calendrier officiel. S'il n'y a pas de Ligue des Champions aujourd'hui, N'INVENTE PAS UN MATCH Real-Liverpool. Si un match s'est déjà joué hier, ne le propose pas.
@@ -66,7 +66,7 @@ Renvoie UNIQUEMENT le JSON.
 """
 
 def get_niche_sports_extractor_prompt():
-    today = datetime.datetime.now().strftime("%A %d %B %Y")
+    today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
     return f"""
 Tu es un robot d'extraction RIGOUREUX spécialisé UNIQUEMENT dans les sports de niche français.
 Navigue sur internet (sofascore, lequipe, flashscore) pour trouver l'agenda EXACT d'aujourd'hui ({today}) ou de demain MAXIMUM.
@@ -148,7 +148,7 @@ def fetch_live_web_data(force_refresh=False):
         except Exception as e:
             print(f"Error fetching niche sports via Gemini: {e}")
             # Failsafe statique pour s'assurer que les French Niche Sports s'affichent toujours même si l'API IA sature
-            today_str = datetime.utcnow().strftime('%Y-%m-%d')
+            today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
             matches.extend([
                 {"id": "n1", "sport": "Rugby", "competition": "Pro D2", "homeTeam": "Valence Romans", "awayTeam": "RC Vannes", "date": f"{today_str} 21:00 UTC", "odds": {"1": 1.85, "N": 20.0, "2": 2.15}, "specialMarket": "Vainqueur Match", "specialOdd": 1.85},
                 {"id": "n2", "sport": "Handball", "competition": "Starligue", "homeTeam": "Istres", "awayTeam": "Tremblay", "date": f"{today_str} 20:00 UTC", "odds": {"1": 1.95, "N": 8.0, "2": 2.05}, "specialMarket": "Vainqueur Match", "specialOdd": 1.95},

@@ -1,5 +1,5 @@
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 import time
@@ -102,7 +102,7 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
                 if date_str:
                     try:
                         match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                        now = datetime.now(match_date.tzinfo) if match_date.tzinfo else datetime.utcnow()
+                        now = datetime.now(timezone.utc)
                         delta_hours = (match_date - now).total_seconds() / 3600
                         # STRICT: Only 72h future and 12h past. Discard June 2026.
                         if delta_hours > 72 or delta_hours < -12:
@@ -262,7 +262,7 @@ def scrape_real_matches(leagues=None, force_refresh=False):
                     try:
                         # ESPN format is usually ISO: 2026-06-11T19:00Z
                         match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                        now = datetime.now(match_date.tzinfo) if match_date.tzinfo else datetime.utcnow()
+                        now = datetime.now(timezone.utc)
                         delta_hours = (match_date - now).total_seconds() / 3600
                         if delta_hours > 72 or delta_hours < -12:
                             continue 

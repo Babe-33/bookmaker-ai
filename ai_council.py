@@ -152,9 +152,7 @@ def fetch_live_web_data(force_refresh=False):
             matches.extend([
                 {"id": "n1", "sport": "Rugby", "competition": "Pro D2", "homeTeam": "Valence Romans", "awayTeam": "RC Vannes", "date": f"{today_str} 21:00 UTC", "odds": {"1": 1.85, "N": 20.0, "2": 2.15}, "specialMarket": "Vainqueur Match", "specialOdd": 1.85},
                 {"id": "n2", "sport": "Handball", "competition": "Starligue", "homeTeam": "Istres", "awayTeam": "Tremblay", "date": f"{today_str} 20:00 UTC", "odds": {"1": 1.95, "N": 8.0, "2": 2.05}, "specialMarket": "Vainqueur Match", "specialOdd": 1.95},
-                {"id": "n3", "sport": "Hockey", "competition": "Ligue Magnus", "homeTeam": "Bordeaux", "awayTeam": "Marseille", "date": f"{today_str} 20:30 UTC", "odds": {"1": 1.75, "N": 4.5, "2": 3.10}, "specialMarket": "Vainqueur Match", "specialOdd": 1.75},
-                {"id": "n4", "sport": "Hockey", "competition": "Ligue Magnus", "homeTeam": "Anglet", "awayTeam": "Rouen", "date": f"{today_str} 20:30 UTC", "odds": {"1": 4.20, "N": 5.0, "2": 1.45}, "specialMarket": "Vainqueur Match", "specialOdd": 1.45},
-                {"id": "n5", "sport": "Handball", "competition": "Starligue", "homeTeam": "Montpellier", "awayTeam": "PSG", "date": "2026-03-07 20:00 UTC", "odds": {"1": 2.80, "N": 7.5, "2": 1.55}, "specialMarket": "Vainqueur Match", "specialOdd": 1.55}
+                {"id": "n5", "sport": "Handball", "competition": "Starligue", "homeTeam": "Montpellier", "awayTeam": "PSG", "date": f"{today_str} 20:00 UTC", "odds": {"1": 2.80, "N": 7.5, "2": 1.55}, "specialMarket": "Vainqueur Match", "specialOdd": 1.55}
             ])
             
     return matches

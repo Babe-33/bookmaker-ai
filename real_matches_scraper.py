@@ -257,6 +257,17 @@ def scrape_real_matches(leagues=None, force_refresh=False):
             for event in events:
                 date_str = event.get("date", "Unknown Date")
                 
+                # STRICT Date Filter for ESPN too
+                if date_str != "Unknown Date":
+                    try:
+                        # ESPN format is usually ISO: 2026-06-11T19:00Z
+                        match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                        now = datetime.now(match_date.tzinfo) if match_date.tzinfo else datetime.utcnow()
+                        delta_hours = (match_date - now).total_seconds() / 3600
+                        if delta_hours > 72 or delta_hours < -12:
+                            continue 
+                    except: pass
+                
                 status = event.get("status", {}).get("type", {}).get("state", "")
                 if status == "post":
                     continue # Finished matches

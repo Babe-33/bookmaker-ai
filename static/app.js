@@ -93,9 +93,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const { balance, initial_balance } = db.bankroll;
         bankrollValue.innerText = `${balance.toFixed(2)} €`;
 
-        // Calculate ROI
-        const diff = balance - initial_balance;
-        const roi = (diff / initial_balance) * 100;
+        // Calculate ROI (protect against div by 0 and ensure initial_balance exists)
+        const initial = initial_balance || balance;
+        const diff = balance - initial;
+        const roi = initial > 0 ? (diff / initial) * 100 : 0;
+
         roiValue.innerText = `${roi > 0 ? '+' : ''}${roi.toFixed(1)} %`;
         roiValue.style.color = roi >= 0 ? '#10b981' : '#ef4444';
 
@@ -247,8 +249,19 @@ document.addEventListener('DOMContentLoaded', () => {
             runBtn.innerText = '✅ Analyse Terminée';
         } catch (error) {
             console.error(error);
-            runBtn.innerText = '❌ Erreur IA (Réessayer)';
-            runBtn.disabled = false;
+            // Implement 60s cooldown timer
+            let timeLeft = 60;
+            runBtn.disabled = true;
+
+            const timer = setInterval(() => {
+                runBtn.innerText = `⏳ Quota IA. Attente : ${timeLeft}s`;
+                timeLeft -= 1;
+                if (timeLeft < 0) {
+                    clearInterval(timer);
+                    runBtn.innerText = '🔄 Relancer l\'Analyse';
+                    runBtn.disabled = false;
+                }
+            }, 1000);
         }
     });
 

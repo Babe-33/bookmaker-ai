@@ -74,8 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentMatches = data.matches;
                 renderMatches(currentMatches);
                 runBtn.disabled = false;
+            } else {
+                // Even if no matches, allow user to try manual import
+                runBtn.disabled = true;
             }
-        } catch (e) { console.error("Auto-load failed", e); }
+        } catch (e) {
+            console.error("Auto-load failed", e);
+            matchesList.innerHTML = '<div class="empty-state">⚠️ Échec auto-chargement. Cliquez sur "Importer".</div>';
+        }
         loadBankroll();
     }
     initMatches();
@@ -262,6 +268,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     runBtn.disabled = false;
                 }
             }, 1000);
+
+            // Helpful message for the user
+            bookieDebate.innerHTML = '<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">🛑 <strong>Quota Google Dépassé (429)</strong><br>Le moteur d\'analyse est saturé. Veuillez patienter 60 secondes environ avant de relancer l\'analyse. C\'est indépendant de notre volonté, Google limite les requêtes gratuites.</div>';
         }
     });
 

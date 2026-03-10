@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import time
 from datetime import datetime, timezone
 from real_matches_scraper import scrape_real_matches
 from google import genai
@@ -96,12 +97,24 @@ Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
 Renvoie UNIQUEMENT le JSON. Pas de texte.
 """
 
+# Global cache for niche sports to prevent hitting quota too fast (30 mins)
+MATCH_CACHE = {"data": [], "timestamp": 0}
+
 def fetch_live_web_data(force_refresh=False):
     """
     Hybrid Scraper:
-    1. Gets 100% real matches and odds from ESPN API (Football, NBA, Top 14).
-    2. Fallbacks to a HIGHLY CONSTRAINED Gemini search strictly for French niche sports (Pro D2, Starligue, Magnus).
+    1. Gets 100% real matches and odds from ESPN API.
+    2. Fallbacks to a HIGHLY CONSTRAINED Gemini search for niche sports.
+    3. Uses a 30-min cache to protect Gemini API quota.
     """
+    global MATCH_CACHE
+    now = time.time()
+    
+    # Return cache if not expired (30 mins = 1800s)
+    if not force_refresh and (now - MATCH_CACHE["timestamp"] < 1800) and MATCH_CACHE["data"]:
+        print("Using MATCH_CACHE (Quota Protection Active)")
+        return MATCH_CACHE["data"]
+
     matches = []
     # 1. API Direct (ESPN)
     try:
@@ -155,6 +168,11 @@ def fetch_live_web_data(force_refresh=False):
                 {"id": "n5", "sport": "Handball", "competition": "Starligue", "homeTeam": "Montpellier", "awayTeam": "PSG", "date": f"{today_str} 20:00 UTC", "odds": {"1": 2.80, "N": 7.5, "2": 1.55}, "specialMarket": "Vainqueur Match", "specialOdd": 1.55}
             ])
             
+    # Update cache
+    if matches:
+        MATCH_CACHE["data"] = matches
+        MATCH_CACHE["timestamp"] = now
+        
     return matches
 
 def fetch_live_in_play_data():

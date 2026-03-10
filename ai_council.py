@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from real_matches_scraper import scrape_real_matches
 from google import genai
 from google.genai import types
@@ -110,9 +110,9 @@ def fetch_live_web_data(force_refresh=False):
     global MATCH_CACHE
     now = time.time()
     
-    # Return cache if not expired (30 mins = 1800s)
-    if not force_refresh and (now - MATCH_CACHE["timestamp"] < 1800) and MATCH_CACHE["data"]:
-        print("Using MATCH_CACHE (Quota Protection Active)")
+    # Return cache if not expired (2 hours = 7200s)
+    if not force_refresh and (now - MATCH_CACHE["timestamp"] < 7200) and MATCH_CACHE["data"]:
+        print("Using MATCH_CACHE (2-Hour Quota Protection Active)")
         return MATCH_CACHE["data"]
 
     matches = []
@@ -160,12 +160,13 @@ def fetch_live_web_data(force_refresh=False):
             
         except Exception as e:
             print(f"Error fetching niche sports via Gemini: {e}")
-            # Failsafe statique pour s'assurer que les French Niche Sports s'affichent toujours même si l'API IA sature
+            # Failsafe statique avec DATES DYNAMIQUES
             today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            tom_str = (datetime.now(timezone.utc) + timedelta(days=1)).strftime('%Y-%m-%d')
             matches.extend([
-                {"id": "n1", "sport": "Rugby", "competition": "Pro D2", "homeTeam": "Valence Romans", "awayTeam": "RC Vannes", "date": f"{today_str} 21:00 UTC", "odds": {"1": 1.85, "N": 20.0, "2": 2.15}, "specialMarket": "Vainqueur Match", "specialOdd": 1.85},
-                {"id": "n2", "sport": "Handball", "competition": "Starligue", "homeTeam": "Istres", "awayTeam": "Tremblay", "date": f"{today_str} 20:00 UTC", "odds": {"1": 1.95, "N": 8.0, "2": 2.05}, "specialMarket": "Vainqueur Match", "specialOdd": 1.95},
-                {"id": "n5", "sport": "Handball", "competition": "Starligue", "homeTeam": "Montpellier", "awayTeam": "PSG", "date": f"{today_str} 20:00 UTC", "odds": {"1": 2.80, "N": 7.5, "2": 1.55}, "specialMarket": "Vainqueur Match", "specialOdd": 1.55}
+                {"id": "n1", "sport": "Rugby", "competition": "Pro D2", "homeTeam": "Béziers", "awayTeam": "Provence Rugby", "date": f"{today_str} 21:00 UTC", "odds": {"1": 1.75, "N": 20.0, "2": 2.25}, "specialMarket": "Vainqueur Match", "specialOdd": 1.75},
+                {"id": "n2", "sport": "Handball", "competition": "Starligue", "homeTeam": "PSG", "awayTeam": "Nantes", "date": f"{today_str} 20:00 UTC", "odds": {"1": 1.45, "N": 8.0, "2": 3.80}, "specialMarket": "Vainqueur Match", "specialOdd": 1.45},
+                {"id": "n3", "sport": "Hockey", "competition": "Ligue Magnus", "homeTeam": "Grenoble", "awayTeam": "Rouen", "date": f"{tom_str} 20:15 UTC", "odds": {"1": 1.95, "N": 4.5, "2": 2.10}, "specialMarket": "Vainqueur Match", "specialOdd": 1.95}
             ])
             
     # Update cache

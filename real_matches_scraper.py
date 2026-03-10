@@ -42,25 +42,21 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
         "soccer_france_ligue_one",
         "soccer_france_ligue_two",
         "soccer_epl",
-        "soccer_uefa_champs_league",
+        "soccer_uefa_champions_league",
+        "soccer_uefa_europa_league",
         "soccer_germany_bundesliga",
+        "soccer_italy_serie_a",
+        "soccer_spain_la_liga",
         "soccer_netherlands_eredivisie",
         "soccer_portugal_primeira_liga",
         "rugby_union_top_14",
-        "soccer_uefa_champions_league",
-        "soccer_uefa_europa_league",
-        "soccer_france_ligue_1",
-        "soccer_uefa_european_championship",
-        "soccer_fifa_world_cup",
         "rugby_union_pro_d2",
         "rugby_union_six_nations",
         "basketball_nba",
         "basketball_euroleague",
         "tennis_atp",
         "tennis_wta",
-        "icehockey_nhl",
-        "motorsport_formula_1",
-        "winter_sports_biathlon"
+        "icehockey_nhl"
     ]
     
     for sport_key in sports_to_fetch:

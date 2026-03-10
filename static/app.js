@@ -75,7 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMatches(currentMatches);
                 runBtn.disabled = false;
             } else {
-                // Even if no matches, allow user to try manual import
                 runBtn.disabled = true;
             }
         } catch (e) {
@@ -83,8 +82,26 @@ document.addEventListener('DOMContentLoaded', () => {
             matchesList.innerHTML = '<div class="empty-state">⚠️ Échec auto-chargement. Cliquez sur "Importer".</div>';
         }
         loadBankroll();
+        loadDailyBrief();
     }
     initMatches();
+
+    async function loadDailyBrief() {
+        const briefContent = document.getElementById('dailyBriefContent');
+        try {
+            const res = await fetch('/api/journal/brief');
+            const data = await res.json();
+            if (data.text) {
+                briefContent.innerHTML = formatMarkdown(data.text);
+                briefContent.classList.remove('empty-state');
+                briefContent.style.fontStyle = 'normal';
+                briefContent.style.textAlign = 'left';
+            }
+        } catch (e) {
+            console.error("Daily brief load fail", e);
+            briefContent.innerHTML = "Aucun briefing disponible.";
+        }
+    }
 
     // Bankroll Logic
     async function loadBankroll() {
@@ -280,9 +297,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ? matches
             : matches.filter(m => {
                 const s = m.sport.toLowerCase();
+                const comp = (m.competition || "").toLowerCase();
                 if (currentFilter === 'other') return !['football', 'rugby', 'basket', 'hockey', 'f1', 'biathlon', 'tennis'].some(k => s.includes(k));
                 if (currentFilter === 'basket') return s.includes('basket') || s.includes('nba');
                 if (currentFilter === 'hockey') return s.includes('hockey') || s.includes('nhl');
+                if (currentFilter === 'uefa') return comp.includes('champion') || comp.includes('uefa');
                 return s.includes(currentFilter);
             });
 

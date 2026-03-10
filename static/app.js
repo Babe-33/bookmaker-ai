@@ -298,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.innerHTML = `
                 <div class="match-header">
                     <span class="sport-badge">${match.sport}</span>
+                    ${match.isSurebet ? '<span class="surebet-badge">🔥 SUREBET</span>' : ''}
                     <span class="best-odds-badge">✨ Meilleure Cote</span>
                     <span>${match.competition}</span>
                     <span>${formatDate(match.date)}</span>
@@ -310,35 +311,62 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderTicket(ticket) {
-        bookieDebate.innerHTML = formatMarkdown(ticket.debate);
-        totalOddsValue.innerText = `x ${ticket.total_odds}`;
+    function renderTicket(data) {
+        // The data now contains { main_ticket, safe_ticket, debate }
+        const main = data.main_ticket;
+        const safe = data.safe_ticket;
+        const debate = data.debate;
+
+        bookieDebate.innerHTML = formatMarkdown(debate);
+
+        // Render Main Ticket
+        totalOddsValue.innerText = `x ${main.total_odds}`;
         finalTicketList.innerHTML = '';
 
-        // Add Staking Info
-        if (ticket.suggested_stake_percent) {
+        if (main.suggested_stake_percent) {
             const stakeDiv = document.createElement('div');
             stakeDiv.style = "background: rgba(16, 185, 129, 0.1); border: 1px dashed #10b981; padding: 0.8rem; border-radius: 8px; margin-bottom: 1rem; color: #10b981; font-weight: bold; text-align: center;";
-            stakeDiv.innerHTML = `💰 Mise suggérée : ${ticket.suggested_stake_percent} (${ticket.suggested_stake_value} €)`;
+            stakeDiv.innerHTML = `💰 Mise suggérée : ${main.suggested_stake_percent} (${main.suggested_stake_value} €)`;
             finalTicketList.appendChild(stakeDiv);
         }
 
-        ticket.selections.forEach(item => {
+        renderSelections(main.selections, finalTicketList);
+
+        // Render Safe Ticket
+        const safeContainer = document.getElementById('safeTicketContainer');
+        const safeList = document.getElementById('safeTicketList');
+        const safeTotal = document.getElementById('safeTotalOdds');
+
+        if (safe && safe.selections && safe.selections.length > 0) {
+            safeContainer.style.display = 'block';
+            safeTotal.innerText = `x ${safe.total_odds}`;
+            safeList.innerHTML = '';
+            renderSelections(safe.selections, safeList);
+        } else {
+            safeContainer.style.display = 'none';
+        }
+
+        // Save to history (main ticket is usually the priority for history)
+        saveTicketToHistory(main);
+        placeBetBtn.disabled = false;
+    }
+
+    function renderSelections(selections, container) {
+        selections.forEach(item => {
             const div = document.createElement('div');
             div.className = 'ticket-item';
             div.innerHTML = `
                 <div class="ticket-match">
-                    <div class="ticket-match-name">${item.match_name}</div>
+                    <div class="ticket-match-name">
+                        ${item.match_name} 
+                        ${item.is_niche ? '<span class="niche-badge">NICHE</span>' : ''}
+                    </div>
                     <div class="ticket-prediction">Pari : ${item.prediction} ${item.confidence ? `<span class="conf-pill">${item.confidence}</span>` : ''}</div>
                 </div>
                 <div class="ticket-odd">${item.odds}</div>
             `;
-            finalTicketList.appendChild(div);
+            container.appendChild(div);
         });
-
-        // Save to history automatically
-        saveTicketToHistory(ticket);
-        placeBetBtn.disabled = false;
     }
 
     async function saveTicketToHistory(ticket) {

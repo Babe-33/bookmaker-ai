@@ -163,7 +163,7 @@
                     <!-- Final Ticket -->
                     <section class="ticket-section glass-panel highlight-panel">
                         <div class="ticket-header">
-                            <h2>🎫 Le Ticket Bookmaker (Value Bet)</h2>
+                            <h2>🎫 Le Ticket Bookmaker (Principal)</h2>
                             <div class="total-odds" id="totalOddsValue">x 0.00</div>
                         </div>
 
@@ -173,6 +173,19 @@
 
                         <div id="finalTicketList" class="ticket-list">
                             <!-- Ticket items will be injected here -->
+                        </div>
+
+                        <!-- Safe Ticket Section -->
+                        <div id="safeTicketContainer"
+                            style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem; display: none;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3 style="color: #10b981;">🛡️ Le Combiné Sécurisé (Safe)</h3>
+                                <div id="safeTotalOdds"
+                                    style="background: #10b981; color: #fff; padding: 0.2rem 0.6rem; border-radius: 99px; font-weight: bold; font-size: 0.9rem;">
+                                    x 0.00</div>
+                            </div>
+                            <div id="safeTicketList" class="ticket-list"></div>
                         </div>
 
                         <button id="placeBetBtn" class="btn cta full-width" disabled>Jouer sur Parions Sport</button>

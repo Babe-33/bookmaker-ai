@@ -216,7 +216,8 @@ def build_prompt_data(matches):
         dc_str = f" | Double Chance (1X: {odds.get('dc1x', '-')}, 12: {odds.get('dc12', '-')}, X2: {odds.get('dcx2', '-')})"
         h_str = f" | Handicap (Dom -1: {odds.get('h_minus_1', '-')}, Ext +1: {odds.get('a_plus_1', '-')})"
         spec_str = f" | Pari Spécial: {m.get('specialMarket', 'Aucun')} à {m.get('specialOdd', '-')}"
-        prompt_data += f"- ID {m['id']} | {m['sport']} ({m['competition']}) : {m['homeTeam']} vs {m['awayTeam']} | Cotes: {odds_str}{adv_str}{dc_str}{h_str}{spec_str}\n"
+        sure_str = " | 🔥 SUREBET DETECTÉ (Profit Garanti!)" if m.get("isSurebet") else ""
+        prompt_data += f"- ID {m['id']} | {m['sport']} ({m['competition']}) : {m['homeTeam']} vs {m['awayTeam']} | Cotes: {odds_str}{adv_str}{dc_str}{h_str}{spec_str}{sure_str}\n"
     return prompt_data
 
 # Personas Instructions - DEEP ANALYSIS
@@ -296,33 +297,44 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
 Ta mission : Créer le ticket parfait en utilisant toutes les données des experts.
 TON CAPITAL ACTUEL : {balance}€
 
-RÈGLES D'OR :
+RÈGLES D'OR MISES À JOUR (Phase 47) :
 1. CHASSEUR DE VALUE : Compare la probabilité réelle avec les MAX ODDS.
-2. SAME GAME PARLAY (SGP) : Autorisé sur le même match.
-3. STAKING (KELLY CRITERION) : Suggère une mise en % du capital et en valeur (€) basée sur (Confiance vs Cote).
-4. CONFIDENCE : Score unanime > 7/10 uniquement.
+2. DOMINATION NICHE : Priorise les sports de niche (Rugby Pro D2, Handball Starligue, Hockey Magnus). Les bookmakers y font plus d'erreurs. Si tu trouves de la valeur ici, augmente le score de confiance.
+3. SUREBETS : Si un match est marqué "SUREBET", il DOIT être dans le ticket (C'est de l'argent gratuit).
+4. SGP : Autorisé sur le même match.
+5. COMBINÉ SÉCURISÉ (SAFE) : En plus de ton ticket principal, prépare un "Safe Ticket" (cote totale entre 1.50 et 2.00) avec les sélections les plus "béton" (probabilité > 90%).
+6. STAKING (KELLY) : Suggère une mise en % basée sur (Confiance vs Cote).
 
 Expertise reçue :
-Statisticien : {stat_response}
+Statisticien (xG) : {stat_response}
 Expert Terrain : {expert_response}
-Avocat du Diable : {pessimist_response}
+Avocat du Diable (Biais Public) : {pessimist_response}
 Le Réseauteur : {trend_response}
 
-Retourne UN JSON :
+Retourne UN JSON avec DEUX tickets :
 {{
-    "debate": "Résumé tactique.",
-    "total_odds": 5.42,
-    "suggested_stake_percent": "5%",
-    "suggested_stake_value": 12.5,
-    "selections": [
-        {{
-            "match_id": "ID",
-            "match_name": "Team A vs Team B",
-            "prediction": "Victoire A",
-            "odds": 2.10,
-            "confidence": "9/10"
-        }}
-    ]
+    "debate": "Résumé tactique global.",
+    "main_ticket": {{
+        "total_odds": 5.42,
+        "suggested_stake_percent": "5%",
+        "suggested_stake_value": 12.5,
+        "selections": [
+            {{
+                "match_id": "ID",
+                "match_name": "Team A vs Team B",
+                "prediction": "Victoire A",
+                "odds": 2.10,
+                "confidence": "9/10",
+                "is_niche": true
+            }}
+        ]
+    }},
+    "safe_ticket": {{
+        "total_odds": 1.75,
+        "suggested_stake_percent": "10%",
+        "suggested_stake_value": 25.0,
+        "selections": []
+    }}
 }}
 """
     final_ticket_json_str = await asyncio.to_thread(call_persona, client, sys_bookie, prompt_data, False)

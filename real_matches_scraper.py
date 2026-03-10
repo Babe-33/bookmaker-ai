@@ -168,6 +168,26 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
                 for k in advanced_markets:
                     if advanced_markets[k] == 0.0: advanced_markets[k] = "-"
                 
+                # Strategy 4: Surebet Detection (Arbitrage)
+                # Formula: (1/Odds1) + (1/OddsN) + (1/Odds2) < 1.0
+                is_surebet = False
+                margin = 0.0
+                try:
+                    o1 = float(odds_dict["1"]) if odds_dict["1"] != "-" else 0
+                    oN = float(odds_dict["N"]) if odds_dict["N"] != "-" else 0
+                    o2 = float(odds_dict["2"]) if odds_dict["2"] != "-" else 0
+                    
+                    if o1 > 0 and o2 > 0:
+                        if oN > 0: # 3-way market (Football)
+                            margin = (1/o1) + (1/oN) + (1/o2)
+                        else: # 2-way market (NBA, Tennis)
+                            margin = (1/o1) + (1/o2)
+                    
+                    if 0 < margin < 1.0:
+                        is_surebet = True
+                except:
+                    pass
+
                 odds_dict.update(advanced_markets) 
 
                 matches.append({
@@ -178,6 +198,8 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
                     "awayTeam": away_team,
                     "date": date_str,
                     "odds": odds_dict,
+                    "isSurebet": is_surebet,
+                    "arbitrageMargin": round(margin, 4) if margin > 0 else None,
                     "specialMarket": "Vainqueur Match (Optimisé)",
                     "specialOdd": odds_dict["1"]
                 })

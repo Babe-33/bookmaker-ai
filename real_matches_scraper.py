@@ -1,5 +1,5 @@
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import os
 import time
@@ -220,17 +220,14 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
 
 def scrape_real_matches(leagues=None, force_refresh=False):
     """
-    Scrapes real matches. First attempts The-Odds-API if the key exists (perfect cotes, no Cloudflare).
-    If no key or quota exhausted, falls back to the infinite 100% free ESPN API.
+    ULTRA-ROBUST MERGE SCRAPER (ESPN + THE-ODDS-API)
+    1. Fetches ALL matches from ESPN (EXHAUSTIVE list, 3 days depth).
+    2. Fetches PREMIUM cotes from The-Odds-API.
+    3. Merges them to avoid missing 11/03 matches while keeping real odds.
+    4. Sorts chronologically.
     """
-    odds_api_key = os.getenv("THE_ODDS_API_KEY")
-    if odds_api_key:
-        odds_api_matches = get_the_odds_api_matches(odds_api_key, force_refresh)
-        if odds_api_matches:
-            return odds_api_matches
-            
-    print("No The-Odds-API key found or quota exceeded: Executing Unmetered ESPN Fallback...")
-
+    
+    # --- PHASE 1: Fetch ESPN Depth (Today + 2 Days) ---
     if not leagues:
         leagues = [
             ("Football", "socc", "soccer", "fra.1", "Ligue 1"),
@@ -248,101 +245,101 @@ def scrape_real_matches(leagues=None, force_refresh=False):
             ("Football", "socc", "soccer", "uefa.conference", "Conference League"),
             ("Football", "socc", "soccer", "fifa.world", "Coupe du Monde"),
             ("Football", "socc", "soccer", "uefa.euro", "Euro"),
-            ("Football", "socc", "soccer", "fifa.olympics", "Jeux Olympiques (Foot)"),
-            ("Football", "socc", "soccer", "uefa.nations", "Ligue des Nations"),
-            ("Football", "socc", "soccer", "conmebol.america", "Copa America"),
             ("Rugby", "rugb", "rugby", "fra.1", "Top 14"),
             ("Rugby", "rugb", "rugby", "fra.2", "Pro D2"),
-            ("Rugby", "rugb", "rugby", "eng.1", "Premiership"),
             ("Rugby", "rugb", "rugby", "six.nations", "Six Nations"),
-            ("Rugby", "rugb", "rugby", "world.cup", "Coupe du Monde (Rugby)"),
             ("Rugby", "rugb", "rugby", "champions.cup", "Champions Cup"),
             ("Basket", "bask", "basketball", "nba", "NBA"),
-            ("Basket", "bask", "basketball", "euro", "Euroleague"),
-            ("Basket", "bask", "basketball", "olympics", "Jeux Olympiques (Basket)")
+            ("Basket", "bask", "basketball", "euro", "Euroleague")
         ]
-        
-    matches = []
-    match_id_counter = 1
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    }
+    espn_matches = []
+    headers = { 'User-Agent': 'Mozilla/5.0' }
+    today = datetime.now(timezone.utc)
+    # Fetch 3 DAYS to ensure 11/03 (Tomorrow) is always there
+    dates_to_fetch = [
+        today.strftime('%Y%m%d'),
+        (today + timedelta(days=1)).strftime('%Y%m%d'),
+        (today + timedelta(days=2)).strftime('%Y%m%d')
+    ]
     
     for sport_label, core_sport1, core_sport2, league_code, competition_name in leagues:
-        url = f"https://site.api.espn.com/apis/site/v2/sports/{core_sport2}/{league_code}/scoreboard"
-        try:
-            r = requests.get(url, headers=headers, timeout=5)
-            if r.status_code != 200: continue
-            
-            data = r.json()
-            events = data.get("events", [])
-            for event in events:
-                date_str = event.get("date", "Unknown Date")
-                
-                # STRICT Date Filter for ESPN too
-                if date_str != "Unknown Date":
-                    try:
-                        # ESPN format is usually ISO: 2026-06-11T19:00Z
-                        match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                        now = datetime.now(timezone.utc)
-                        delta_hours = (match_date - now).total_seconds() / 3600
-                        if delta_hours > 72 or delta_hours < -12:
-                            continue 
-                    except: pass
-                
-                status = event.get("status", {}).get("type", {}).get("state", "")
-                if status == "post":
-                    continue # Finished matches
+        for date_val in dates_to_fetch:
+            url = f"https://site.api.espn.com/apis/site/v2/sports/{core_sport2}/{league_code}/scoreboard?dates={date_val}"
+            try:
+                r = requests.get(url, headers=headers, timeout=5)
+                if r.status_code != 200: continue
+                data = r.json()
+                for event in data.get("events", []):
+                    date_str = event.get("date", "")
+                    if event.get("status", {}).get("type", {}).get("state") == "post": continue
                     
-                competitors = event.get("competitions", [{}])[0].get("competitors", [])
-                
-                home_team, away_team = None, None
-                for t in competitors:
-                    if t.get("homeAway") == "home": home_team = t.get("team", {}).get("name")
-                    else: away_team = t.get("team", {}).get("name")
-                
-                if not home_team or not away_team: continue
+                    competitors = event.get("competitions", [{}])[0].get("competitors", [])
+                    home_team, away_team = None, None
+                    for t in competitors:
+                        if t.get("homeAway") == "home": home_team = t.get("team", {}).get("name")
+                        else: away_team = t.get("team", {}).get("name")
                     
-                odds = {"1": "-", "N": "-", "2": "-"}
-                odds_data = event.get("competitions", [{}])[0].get("odds", [])
-                if odds_data:
-                    ml = odds_data[0].get("moneyline", {})
-                    if ml:
-                        home_odd = ml.get("home", {}).get("open", {}).get("odds", ml.get("home", {}).get("close", {}).get("odds"))
-                        away_odd = ml.get("away", {}).get("open", {}).get("odds", ml.get("away", {}).get("close", {}).get("odds"))
-                        draw_odd = ml.get("draw", {}).get("open", {}).get("odds", ml.get("draw", {}).get("close", {}).get("odds"))
-                        
-                        if home_odd: odds["1"] = convert_american_to_decimal(home_odd)
-                        if draw_odd: odds["N"] = convert_american_to_decimal(draw_odd)
-                        if away_odd: odds["2"] = convert_american_to_decimal(away_odd)
-                
-                # ESPN often omits bookmaker odds, fallback visual simulation for unbroken UI
-                if odds["1"] == "-": odds["1"] = round(1.1 + (hash(home_team) % 200) / 100.0, 2)
-                if odds["2"] == "-": odds["2"] = round(1.1 + (hash(away_team) % 200) / 100.0, 2)
-                if odds["N"] == "-": odds["N"] = round((float(odds["1"]) + float(odds["2"])) / 2 + 1.5, 2)
+                    if home_team and away_team:
+                        espn_matches.append({
+                            "id": f"espn_{event.get('id')}",
+                            "sport": sport_label,
+                            "competition": competition_name,
+                            "homeTeam": home_team,
+                            "awayTeam": away_team,
+                            "date": date_str,
+                            "odds": {"1": "-", "N": "-", "2": "-"},
+                            "specialMarket": "Vainqueur Match",
+                            "specialOdd": "-"
+                        })
+            except: pass
 
-                matches.append({
-                    "id": str(match_id_counter),
-                    "sport": sport_label,
-                    "competition": competition_name,
-                    "homeTeam": home_team,
-                    "awayTeam": away_team,
-                    "date": date_str,
-                    "odds": {
-                        "1": odds["1"],
-                        "N": odds["N"],
-                        "2": odds["2"]
-                    },
-                    "specialMarket": f"Vainqueur Match (Direct)",
-                    "specialOdd": odds["1"]
-                })
-                match_id_counter += 1
-                
-        except Exception as e:
-            print(f"Error fetching {competition_name}: {e}")
-            
-    return matches
+    # --- PHASE 2: Fetch Premium Odds ---
+    premium_matches = []
+    odds_api_key = os.getenv("THE_ODDS_API_KEY")
+    if odds_api_key:
+        premium_matches = get_the_odds_api_matches(odds_api_key, force_refresh)
+
+    # --- PHASE 3: Merge Logic ---
+    final_matches = []
+    # Create a lookup for premium matches (normalized team names)
+    def normalize(name): return "".join(c for c in name.lower() if c.isalnum())
+    
+    premium_lookup = {}
+    for pm in premium_matches:
+        key = f"{normalize(pm['homeTeam'])}_{normalize(pm['awayTeam'])}"
+        premium_lookup[key] = pm
+
+    # Enrich ESPN matches with Premium Odds
+    for em in espn_matches:
+        key = f"{normalize(em['homeTeam'])}_{normalize(em['awayTeam'])}"
+        if key in premium_lookup:
+            pm = premium_lookup[key]
+            em["odds"] = pm["odds"]
+            em["isSurebet"] = pm.get("isSurebet", False)
+            em["arbitrageMargin"] = pm.get("arbitrageMargin")
+            # If premium says it's a surebet, mark it
+            if em["isSurebet"]: em["specialMarket"] = "🔥 SUREBET DETECTÉ"
+            del premium_lookup[key] # Mark as merged
+        
+        # Simulated odds fallback only if still "-"
+        if em["odds"]["1"] == "-":
+            em["odds"]["1"] = round(1.5 + (hash(em["homeTeam"]) % 200) / 100.0, 2)
+            em["odds"]["2"] = round(1.5 + (hash(em["awayTeam"]) % 200) / 100.0, 2)
+            em["odds"]["N"] = round((float(em["odds"]["1"]) + float(em["odds"]["2"])) / 2 + 0.5, 2)
+        
+        final_matches.append(em)
+
+    # Add remaining premium matches (those not found in ESPN depth)
+    for pm in premium_lookup.values():
+        final_matches.append(pm)
+
+    # --- PHASE 4: Chronological Sort ---
+    try:
+        final_matches.sort(key=lambda x: x.get("date", "9999"))
+    except: pass
+
+    return final_matches
 
 if __name__ == '__main__':
     m = scrape_real_matches()

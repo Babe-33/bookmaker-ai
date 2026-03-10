@@ -9,7 +9,7 @@ import json
 import requests
 from datetime import datetime
 
-from ai_council import run_ai_council, run_statistician, run_expert, run_pessimist, run_trend, run_bookmaker, fetch_live_web_data
+from ai_council import run_ai_council, run_statistician, run_expert, run_pessimist, run_trend, run_bookmaker, fetch_live_web_data, generate_daily_brief
 
 # --- Persistence Helpers ---
 DB_PATH = "database.json"
@@ -125,6 +125,12 @@ async def get_matches(force_refresh: bool = False):
         if new_matches or not current_matches_cache:
             current_matches_cache = new_matches
     return {"matches": current_matches_cache}
+
+@app.get("/api/journal/brief")
+async def get_daily_brief():
+    global current_matches_cache
+    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    return {"text": await generate_daily_brief(current_matches_cache)}
 
 @app.get("/api/council/statistician")
 async def get_council_stat():

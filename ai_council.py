@@ -97,8 +97,20 @@ Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
 Renvoie UNIQUEMENT le JSON. Pas de texte.
 """
 
-# Global cache for niche sports to prevent hitting quota too fast (30 mins)
+# Cache logic:
+# 1. MATCH_CACHE (30 mins) for the niche sports scraping.
+# 2. ANALYSIS_CACHE (1 hour) for the AI persona responses.
 MATCH_CACHE = {"data": [], "timestamp": 0}
+ANALYSIS_CACHE = {}
+
+def get_matches_hash(matches):
+    """Creates a unique fingerprint for a set of matches to use as cache key."""
+    try:
+        # Sort IDs for deterministic hashing
+        m_ids = sorted([str(m.get('id', '')) for m in matches])
+        return "|".join(m_ids)
+    except:
+        return "fallback_key"
 
 def fetch_live_web_data(force_refresh=False):
     """
@@ -110,13 +122,13 @@ def fetch_live_web_data(force_refresh=False):
     global MATCH_CACHE
     now = time.time()
     
-    # Return cache if not expired (2 hours = 7200s)
-    if not force_refresh and (now - MATCH_CACHE["timestamp"] < 7200) and MATCH_CACHE["data"]:
-        print("Using MATCH_CACHE (2-Hour Quota Protection Active)")
+    # Return cache if not expired (6 hours = 21600s)
+    if not force_refresh and (now - MATCH_CACHE["timestamp"] < 21600) and MATCH_CACHE["data"]:
+        print("Using MATCH_CACHE (6-Hour Quota Protection Active)")
         return MATCH_CACHE["data"]
 
     matches = []
-    # 1. API Direct (ESPN)
+    # 1. API Direct (ESPN + Merge the-odds-api)
     try:
         espn_matches = scrape_real_matches(leagues=None, force_refresh=force_refresh)
         matches.extend(espn_matches)
@@ -223,7 +235,7 @@ def call_persona(client, system_prompt, match_data, use_search=False):
     except Exception as e:
         err_msg = str(e)
         if "429" in err_msg or "quota" in err_msg.lower():
-            return "⏳ (Quota Google dépassé. Attendez 1 minute avant la prochaine analyse.)"
+            return "EXHAUSTED"
         return f"Erreur IA : {err_msg[:50]}..."
 
 def build_prompt_data(matches):
@@ -240,11 +252,11 @@ def build_prompt_data(matches):
     return prompt_data
 
 # Personas Instructions - DEEP ANALYSIS
-sys_stat = """Tu es 'Le Statisticien' (Spécialiste Data Profonde & Expected Goals). 
-RÈGLE D'OR (Stratégie xG) : Ne te contente pas de la forme brute (Victoires/Défaites). Tu DOIS chercher les metrics avancées ("xG" = Expected Goals, "xGA" = Expected Goals Against).
-ANOMALIE À RECHERCHER : Si une équipe perd souvent mais a un xG très haut, c'est une anomalie (malchance). Ses cotes seront surévaluées par les bookmakers. C'est là que se trouve la VRAIE VALEUR. Explique cette anomalie si tu en trouves une.
+sys_stat = """Tu es 'L'Analyste Opta' (Spécialiste Data Profonde & Expected Goals). 
+RÈGLE D'OR (Stratégie Opta) : Utilise la logique d'Opta Analyst. Analyse non seulement les xG (Expected Goals), mais aussi l'intensité du pressing (PPDA), la qualité des séquences et les transitions offensives/défensives.
+ANOMALIE À RECHERCHER : Si une équipe produit un gros volume de jeu (séquences de 10+ passes) mais ne marque pas, elle est "due" pour un retour à la moyenne. C'est une opportunité de 'Value'.
 RÈGLE DE FORMATAGE : Pour chaque match, donne :
-1. ANALYSE STAT & xG (1-2 phrases)
+1. ANALYSE OPTA DATA (1-2 phrases)
 2. NOTE DE CONFIANCE (X/10)"""
 
 sys_expert = """Tu es 'L'Expert Terrain'. Analyse la forme actuelle, les compos probables, blessés et l'enjeu psychologique (Maintien, Titre). 
@@ -266,28 +278,76 @@ RÈGLE DE FORMATAGE : Pour chaque match, donne :
 2. NOTE DE CONFIANCE (X/10)"""
 
 async def run_statistician(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente. Ajoute-la dans les 'Environment Variables' sur Render pour activer les experts."
+    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
+    m_hash = get_matches_hash(matches)
+    cache_key = f"stat_{m_hash}"
+    now = time.time()
+    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
+        print("Using Cache for Statistician")
+        return ANALYSIS_CACHE[cache_key]['data']
+        
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_stat, f"Trouve les stats détaillées des matchs suivants : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", True)
+    res = await asyncio.to_thread(call_persona, client, sys_stat, f"Stats détaillées : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", True)
+    if res != "EXHAUSTED":
+        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
+    else:
+        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
+    return res
 
 async def run_expert(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente. Ajoute-la dans les 'Environment Variables' sur Render pour activer les experts."
+    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
+    m_hash = get_matches_hash(matches)
+    cache_key = f"expert_{m_hash}"
+    now = time.time()
+    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
+        print("Using Cache for Expert")
+        return ANALYSIS_CACHE[cache_key]['data']
+        
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_expert, f"Trouve les avis de RMC, compos et blessés : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", True)
+    res = await asyncio.to_thread(call_persona, client, sys_expert, f"Infos RMC & blessés : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", True)
+    if res != "EXHAUSTED":
+        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
+    else:
+        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
+    return res
 
 async def run_pessimist(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente. Ajoute-la dans les 'Environment Variables' sur Render pour activer les experts."
+    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
+    m_hash = get_matches_hash(matches)
+    cache_key = f"pessimist_{m_hash}"
+    now = time.time()
+    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
+        print("Using Cache for Pessimist")
+        return ANALYSIS_CACHE[cache_key]['data']
+        
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_pessimist, f"Détruis les espoirs des favoris sur ces matchs : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", False)
+    res = await asyncio.to_thread(call_persona, client, sys_pessimist, f"Cherche les pièges : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", False)
+    if res != "EXHAUSTED":
+        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
+    else:
+        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
+    return res
 
 async def run_trend(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente. Ajoute-la dans les 'Environment Variables' sur Render pour activer les experts."
+    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
+    m_hash = get_matches_hash(matches)
+    cache_key = f"trend_{m_hash}"
+    now = time.time()
+    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
+        print("Using Cache for Trend")
+        return ANALYSIS_CACHE[cache_key]['data']
+        
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
-    return await asyncio.to_thread(call_persona, client, sys_trend, f"Quelles sont les grosses tendances de paris sur ces matchs : SOIS EXTRÊMEMENT CONCIS (2 phrases max/match) :\n{prompt_data}", True)
+    res = await asyncio.to_thread(call_persona, client, sys_trend, f"Tendances mondiales : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", True)
+    if res != "EXHAUSTED":
+        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
+    else:
+        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
+    return res
 
 async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
     if not api_key: return {"error": "API Key missing"}
@@ -320,9 +380,10 @@ RÈGLES D'OR MISES À JOUR (Phase 47) :
 1. CHASSEUR DE VALUE : Compare la probabilité réelle avec les MAX ODDS.
 2. DOMINATION NICHE : Priorise les sports de niche (Rugby Pro D2, Handball Starligue, Hockey Magnus). Les bookmakers y font plus d'erreurs. Si tu trouves de la valeur ici, augmente le score de confiance.
 3. SUREBETS : Si un match est marqué "SUREBET", il DOIT être dans le ticket (C'est de l'argent gratuit).
-4. SGP : Autorisé sur le même match.
-5. COMBINÉ SÉCURISÉ (SAFE) : En plus de ton ticket principal, prépare un "Safe Ticket" (cote totale entre 1.50 et 2.00) avec les sélections les plus "béton" (probabilité > 90%).
-6. STAKING (KELLY) : Suggère une mise en % basée sur (Confiance vs Cote).
+4. MARCHÉS AVANCÉS : Utilise toutes les cotes disponibles (Buteurs, Marqueurs d'essai, Différence de buts, Handicap) pour maximiser le ticket.
+5. SGP : Autorisé sur le même match.
+6. COMBINÉ SÉCURISÉ (SAFE) : Prépare un "Safe Ticket" (cote totale entre 1.50 et 2.00) avec les sélections les plus "béton".
+7. STAKING (KELLY) : Suggère une mise en % basée sur (Confiance vs Cote).
 
 Expertise reçue :
 Statisticien (xG) : {stat_response}
@@ -393,6 +454,20 @@ Retourne UN JSON avec DEUX tickets :
         "trend": trend_response,
         "ticket": final_ticket
     }
+
+async def generate_daily_brief(matches):
+    """Generates a high-level briefing for the day based on available matches."""
+    if not api_key: return "Clé API absente."
+    client = genai.Client(api_key=api_key)
+    prompt_data = build_prompt_data(matches[:15]) # Limit to top 15 for conciseness
+    
+    sys_journal = """Tu es le 'Directeur des Opérations'. Ta mission est de donner un briefing matinal (Journal de Bord).
+    1. RÉCAP : Analyse l'opportunité globale du jour (Y a-t-il beaucoup de 'Value' ?).
+    2. CONSEIL DU JOUR : Donne une consigne de mise (ex: 'Journée risquée, misez prudemment' ou 'Grosse opportunité sur le Rugby').
+    3. FOCUS : Cite les 2 matchs les plus sûrs selon toi.
+    SOIS TRÈS COURT ET PROFESSIONNEL."""
+    
+    return await asyncio.to_thread(call_persona, client, sys_journal, f"Briefing du jour :\n{prompt_data}", False)
 
 async def run_ai_council(matches):
     """Legacy wrapper for backwards compat."""

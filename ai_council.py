@@ -3,6 +3,7 @@ import json
 import asyncio
 import time
 from datetime import datetime, timezone, timedelta
+from persistence import get_cache, set_cache, load_db
 from real_matches_scraper import scrape_real_matches
 from google import genai
 from google.genai import types
@@ -101,11 +102,9 @@ Renvoie UNIQUEMENT le JSON. Pas de texte.
 """
 
 # Cache logic:
-# 1. MATCH_CACHE (30 mins) for the niche sports scraping.
-# 2. ANALYSIS_CACHE (1 hour) for the AI persona responses.
-MATCH_CACHE = {"data": [], "timestamp": 0}
-ANALYSIS_CACHE = {} 
-CONSOLIDATED_CACHE = {} # Stores full {stat, expert, pessimist, trend, ticket}
+# Caches are now handled via Firebase persistence (persistence.py)
+# 1. 'match_cache' (6 hours) for the niche sports scraping.
+# 2. 'consolidated_cache_{hash}' (1 hour) for the full AI analyses.
 
 def get_matches_hash(matches):
     """Creates a unique fingerprint for a set of matches to use as cache key."""
@@ -143,15 +142,13 @@ async def fetch_live_web_data(force_refresh=False):
     Hybrid Scraper:
     1. Gets 100% real matches and odds from ESPN API.
     2. Fallbacks to a HIGHLY CONSTRAINED Gemini search for niche sports.
-    3. Uses a 30-min cache to protect Gemini API quota.
+    3. Uses a 6-hour CLOUD cache to protect Gemini API quota.
     """
-    global MATCH_CACHE
-    now = time.time()
-    
     # Return cache if not expired (6 hours = 21600s)
-    if not force_refresh and (now - MATCH_CACHE["timestamp"] < 21600) and MATCH_CACHE["data"]:
-        print("Using MATCH_CACHE (6-Hour Quota Protection Active)")
-        return MATCH_CACHE["data"]
+    cached_matches = get_cache("match_cache", ttl=21600)
+    if not force_refresh and cached_matches:
+        print("Using Cloud MATCH_CACHE (6-Hour Quota Protection Active)")
+        return cached_matches
 
     matches = []
     # 1. API Direct (ESPN + Merge the-odds-api)
@@ -201,19 +198,11 @@ async def fetch_live_web_data(force_refresh=False):
             
         except Exception as e:
             print(f"Error fetching niche sports via Gemini: {e}")
-            # Failsafe statique avec DATES DYNAMIQUES
-            today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-            tom_str = (datetime.now(timezone.utc) + timedelta(days=1)).strftime('%Y-%m-%d')
-            matches.extend([
-                {"id": "n1", "sport": "Rugby", "competition": "Pro D2", "homeTeam": "Béziers", "awayTeam": "Provence Rugby", "date": f"{today_str} 21:00 UTC", "odds": {"1": 1.75, "N": 20.0, "2": 2.25}, "specialMarket": "Vainqueur Match", "specialOdd": 1.75},
-                {"id": "n2", "sport": "Handball", "competition": "Starligue", "homeTeam": "PSG", "awayTeam": "Nantes", "date": f"{today_str} 20:00 UTC", "odds": {"1": 1.45, "N": 8.0, "2": 3.80}, "specialMarket": "Vainqueur Match", "specialOdd": 1.45},
-                {"id": "n3", "sport": "Hockey", "competition": "Ligue Magnus", "homeTeam": "Grenoble", "awayTeam": "Rouen", "date": f"{tom_str} 20:15 UTC", "odds": {"1": 1.95, "N": 4.5, "2": 2.10}, "specialMarket": "Vainqueur Match", "specialOdd": 1.95}
-            ])
+            pass # No static fallback to avoid presenting fake data to the final user
             
-    # Update cache
+    # Update Cloud Cache
     if matches:
-        MATCH_CACHE["data"] = matches
-        MATCH_CACHE["timestamp"] = now
+        set_cache("match_cache", matches)
         
     return matches
 
@@ -329,20 +318,20 @@ async def run_trend(matches):
 async def run_full_analysis(matches, force_refresh=False):
     """
     NUCLEAR QUOTA PROTECTION: ONE CALL TO RULE THEM ALL.
-    Consolidates 5 AI queries into 1.
+    Now uses Persistent Cloud Cache to survive server restarts.
     """
     if not api_key: return {"error": "API Key missing"}
     
     m_hash = get_matches_hash(matches)
-    now = time.time()
+    cache_key = f"full_analysis_{m_hash}"
     
-    if not force_refresh and m_hash in CONSOLIDATED_CACHE:
-        if now - CONSOLIDATED_CACHE[m_hash]['ts'] < 3600:
-            print("Using CONSOLIDATED_CACHE (80% Quota Saving!)")
-            return CONSOLIDATED_CACHE[m_hash]['data']
+    cached_data = get_cache(cache_key, ttl=3600) # 1 hour TTL for analysis
+    if not force_refresh and cached_data:
+        print(f"Using Cloud ANALYSIS_CACHE for {m_hash} (100% Quota Saving!)")
+        return cached_data
 
     client = genai.Client(api_key=api_key)
-    prompt_data = build_prompt_data(matches[:12]) # Constant limit to avoid token blowout
+    prompt_data = build_prompt_data(matches[:12]) 
     
     raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=True)
     
@@ -351,7 +340,7 @@ async def run_full_analysis(matches, force_refresh=False):
 
     analysis_data = extract_json(raw_res)
     if analysis_data:
-        CONSOLIDATED_CACHE[m_hash] = {"data": analysis_data, "ts": now}
+        set_cache(cache_key, analysis_data)
         return analysis_data
     else:
         print(f"Failed to extract JSON from AI response: {raw_res[:200]}...")

@@ -10,43 +10,7 @@ import requests
 from datetime import datetime
 
 from ai_council import run_ai_council, run_statistician, run_expert, run_pessimist, run_trend, run_bookmaker, fetch_live_web_data, generate_daily_brief
-
-# --- Persistence Helpers ---
-DB_PATH = "database.json"
-
-def load_db():
-    firebase_url = os.getenv("FIREBASE_URL")
-    default = {"bankroll": {"balance": 100.0, "initial_balance": 100.0, "currency": "€"}, "history": []}
-    
-    if firebase_url:
-        try:
-            r = requests.get(f"{firebase_url}/db.json", timeout=5)
-            if r.status_code == 200 and r.json():
-                return r.json()
-            else:
-                # Initialize Firebase with default if empty
-                requests.put(f"{firebase_url}/db.json", json=default)
-                return default
-        except Exception as e:
-            print(f"Firebase connection error: {e}. Falling back to local DB.")
-            pass # Fallback to local file if Firebase fails
-            
-    if not os.path.exists(DB_PATH):
-        with open(DB_PATH, "w") as f: json.dump(default, f)
-        return default
-    with open(DB_PATH, "r") as f: return json.load(f)
-
-def save_db(data):
-    firebase_url = os.getenv("FIREBASE_URL")
-    if firebase_url:
-        try:
-            requests.put(f"{firebase_url}/db.json", json=data, timeout=5)
-            return
-        except Exception as e:
-            print(f"Firebase save error: {e}. Saving to local DB.")
-            pass
-            
-    with open(DB_PATH, "w") as f: json.dump(data, f, indent=4)
+from persistence import load_db, save_db
 
 # --- Models ---
 class TicketAction(BaseModel):

@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
+# Global Concurrency Semaphore: Only 1 Gemini call at a time to stay under RPS limits
+GEMINI_SEMAPHORE = asyncio.Semaphore(1)
+
 def get_base_extractor_prompt():
     today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
     return f"""
@@ -140,15 +143,18 @@ def fetch_live_web_data(force_refresh=False):
         client = genai.Client(api_key=api_key)
         sys_prompt = get_niche_sports_extractor_prompt()
         try:
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), la Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
-                config=types.GenerateContentConfig(
-                    system_instruction=sys_prompt,
-                    temperature=0.0,
-                    tools=[{"google_search": {}}]
-                ),
-            )
+            # Use Semaphore to avoid RPS saturation
+            async with GEMINI_SEMAPHORE:
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model="gemini-2.0-flash",
+                    contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), the Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
+                    config=types.GenerateContentConfig(
+                        system_instruction=sys_prompt,
+                        temperature=0.0,
+                        tools=[{"google_search": {}}]
+                    ),
+                )
             
             raw = response.text
             if "```json" in raw:
@@ -190,53 +196,49 @@ def fetch_live_web_data(force_refresh=False):
 
 def fetch_live_in_play_data():
     """Uses Gemini to find matches CURRENTLY playing for In-Play Live Betting."""
-    if not api_key:
-        return []
-        
-    client = genai.Client(api_key=api_key)
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents="Quels sont les matchs de sport intéressants actuellement en direct (live score) avec des cotes potentiellement rentables ?",
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_LIVE_EXTRACTOR,
-                temperature=0.3,
-                tools=[{"google_search": {}}]
-            ),
-        )
-        raw = response.text
-        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
-        data = json.loads(raw.strip())
-        return data.get("matches", [])
-    except Exception as e:
-        print(f"Error fetching in_play matches: {e}")
-        return []
+    return [] # Disabled for quota safety
 
-def call_persona(client, system_prompt, match_data, use_search=False):
+async def call_persona_with_retry(client, system_prompt, match_data, use_search=False, max_retries=3):
+    """
+    Wraps Gemini calls with a global semaphore (RPS protection) and an auto-retry loop.
+    """
     if not client:
         return "Pas de clé API."
 
-    config_kwargs = {
-        "system_instruction": system_prompt,
-        "temperature": 0.2,
-    }
+    # Use Semaphore to avoid RPS saturation
+    async with GEMINI_SEMAPHORE:
+        for attempt in range(max_retries):
+            config_kwargs = {
+                "system_instruction": system_prompt,
+                "temperature": 0.2,
+            }
+            if use_search:
+                config_kwargs["tools"] = [{"google_search": {}}]
 
-    if use_search:
-        config_kwargs["tools"] = [{"google_search": {}}]
+            try:
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model="gemini-2.0-flash",
+                    contents=match_data,
+                    config=types.GenerateContentConfig(**config_kwargs)
+                )
+                return response.text
+            except Exception as e:
+                err_msg = str(e)
+                if "429" in err_msg or "quota" in err_msg.lower():
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 3s, 6s...
+                        wait_time = (attempt + 1) * 3
+                        print(f"Quota Gemini dépassé. Retentative en {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        return "EXHAUSTED"
+                return f"Erreur IA : {err_msg[:50]}..."
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash", # Using 2.0-flash as 2.5 is not yet public
-            contents=match_data,
-            config=types.GenerateContentConfig(**config_kwargs),
-        )
-        return response.text
-    except Exception as e:
-        err_msg = str(e)
-        if "429" in err_msg or "quota" in err_msg.lower():
-            return "EXHAUSTED"
-        return f"Erreur IA : {err_msg[:50]}..."
+# Legacy alias
+async def call_persona(*args, **kwargs):
+    return await call_persona_with_retry(*args, **kwargs)
 
 def build_prompt_data(matches):
     prompt_data = "Matchs et MEILLEURES cotes du marché (MAX ODDS) :\n"
@@ -354,15 +356,12 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches)
     
-    # Run the 4 experts concurrently to save massive time if it's the legacy call
+    # Run the 4 experts SEQUENTIALLY to stay strictly under the free tier quota
     if not stat_response:
-        stat_task = run_statistician(matches)
-        expert_task = run_expert(matches)
-        pessimist_task = run_pessimist(matches)
-        trend_task = run_trend(matches)
-        stat_response, expert_response, pessimist_response, trend_response = await asyncio.gather(
-            stat_task, expert_task, pessimist_task, trend_task
-        )
+        stat_response = await run_statistician(matches)
+        expert_response = await run_expert(matches)
+        pessimist_response = await run_pessimist(matches)
+        trend_response = await run_trend(matches)
 
     # 5. Moi (Le Bookmaker / ticket final)
     # Load bankroll for localized staking

@@ -234,22 +234,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const trendPromise = fetch('/api/council/trend').then(r => r.json());
 
             statPromise.then(data => {
-                const text = data?.text || "❌ Indisponible";
+                let text = data?.text || "❌ Indisponible";
+                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
                 statResponse.innerHTML = formatMarkdown(text);
                 addChatBubble("📊 Statisticien", text);
             });
             expertPromise.then(data => {
-                const text = data?.text || "❌ Indisponible";
+                let text = data?.text || "❌ Indisponible";
+                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
                 expertResponse.innerHTML = formatMarkdown(text);
                 addChatBubble("🧠 Expert", text);
             });
             pessimistPromise.then(data => {
-                const text = data?.text || "❌ Indisponible";
+                let text = data?.text || "❌ Indisponible";
+                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
                 pessimistResponse.innerHTML = formatMarkdown(text);
                 addChatBubble("👿 Avocat du Diable", text);
             });
             trendPromise.then(data => {
-                const text = data?.text || "❌ Indisponible";
+                let text = data?.text || "❌ Indisponible";
+                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
                 trendResponse.innerHTML = formatMarkdown(text);
                 addChatBubble("📈 Réseauteur", text);
             });

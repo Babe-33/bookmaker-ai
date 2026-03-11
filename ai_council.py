@@ -237,6 +237,7 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                 return response.text
             except Exception as e:
                 err_msg = str(e)
+                print(f"Exception from Gemini: {e}") # DEBUG
                 if "429" in err_msg or "quota" in err_msg.lower():
                     if attempt < max_retries - 1:
                         # Exponential backoff: 3s, 6s...
@@ -337,6 +338,9 @@ async def run_full_analysis(matches, force_refresh=False):
     
     if raw_res == "EXHAUSTED":
         return {"error": "QUOTA_EXHAUSTED"}
+        
+    if isinstance(raw_res, str) and raw_res.startswith("Erreur IA :"):
+        return {"error": raw_res}
 
     analysis_data = extract_json(raw_res)
     if analysis_data:

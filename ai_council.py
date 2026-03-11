@@ -173,7 +173,7 @@ async def fetch_live_web_data(force_refresh=False):
             async with GEMINI_SEMAPHORE:
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-2.0-flash",
+                    model="gemini-flash-latest",
                     contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), the Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
                     config=types.GenerateContentConfig(
                         system_instruction=sys_prompt,
@@ -237,7 +237,7 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                 # Use standard gemini-1.5-flash (no latest)
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-2.0-flash",
+                    model="gemini-flash-latest",
                     contents=match_data,
                     config=types.GenerateContentConfig(**config_kwargs)
                 )

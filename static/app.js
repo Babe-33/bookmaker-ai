@@ -231,8 +231,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/council/full');
             const data = await response.json();
 
-            if (data.error === "QUOTA_EXHAUSTED") {
-                throw new Error("QUOTA_EXHAUSTED");
+            if (data.error) {
+                if (data.error === "QUOTA_EXHAUSTED" || data.error.includes("429")) {
+                    throw new Error("QUOTA_EXHAUSTED");
+                } else {
+                    throw new Error(data.error);
+                }
             }
 
             // Update all expert boxes at once
@@ -253,26 +257,37 @@ document.addEventListener('DOMContentLoaded', () => {
             addChatBubble("📈 Réseauteur", trendText);
 
             // Update Ticket
-            renderTicket(data.ticket);
+            if (data.ticket) {
+                renderTicket(data.ticket);
+                runBtn.innerText = '✅ Analyse Terminée';
+            } else {
+                bookieDebate.innerHTML = "L'IA n'a pas pu générer de ticket exploitable.";
+                runBtn.innerText = '⚠️ Terminée avec erreurs';
+            }
+            runBtn.disabled = false;
 
-            runBtn.innerText = '✅ Analyse Terminée';
         } catch (error) {
-            console.error(error);
-            const isQuota = error.message === "QUOTA_EXHAUSTED" || error.status === 429;
-            runBtn.disabled = true;
+            console.error("Analysis failed:", error);
+            const isQuota = error.message === "QUOTA_EXHAUSTED";
 
-            const timer = setInterval(() => {
-                runBtn.innerText = `⏳ Quota IA. Attente : ${timeLeft}s`;
-                timeLeft -= 1;
-                if (timeLeft < 0) {
-                    clearInterval(timer);
-                    runBtn.innerText = '🔄 Relancer l\'Analyse';
-                    runBtn.disabled = false;
-                }
-            }, 1000);
-
-            // Helpful message for the user
-            bookieDebate.innerHTML = '<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">🛑 <strong>Quota Google Dépassé (429)</strong><br>Le moteur d\'analyse est saturé. Veuillez patienter 60 secondes environ avant de relancer l\'analyse. C\'est indépendant de notre volonté, Google limite les requêtes gratuites.</div>';
+            if (isQuota) {
+                let timeLeft = 60;
+                runBtn.disabled = true;
+                const timer = setInterval(() => {
+                    runBtn.innerText = `⏳ Quota IA. Attente : ${timeLeft}s`;
+                    timeLeft -= 1;
+                    if (timeLeft < 0) {
+                        clearInterval(timer);
+                        runBtn.innerText = '🔄 Relancer l\'Analyse';
+                        runBtn.disabled = false;
+                    }
+                }, 1000);
+                bookieDebate.innerHTML = '<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">🛑 <strong>Quota Google Dépassé (429)</strong><br>Le moteur d\'analyse est saturé. Veuillez patienter 60 secondes environ avant de relancer l\'analyse.</div>';
+            } else {
+                runBtn.disabled = false;
+                runBtn.innerText = '🔄 Réessayer l\'Analyse';
+                bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">❌ <strong>Erreur Technique</strong><br>${error.message || "Une erreur est survenue lors de l'analyse."}</div>`;
+            }
         }
     });
 

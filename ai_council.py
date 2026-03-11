@@ -10,7 +10,7 @@ from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+# api_key moved inside functions for better reliability with Render env vars
 
 # Global Concurrency Semaphore: Only 1 Gemini call at a time to stay under RPS limits
 GEMINI_SEMAPHORE = asyncio.Semaphore(1)
@@ -159,8 +159,9 @@ async def fetch_live_web_data(force_refresh=False):
         print(f"Error fetching ESPN matches: {e}")
 
     # 2. Scraper Niche Sport via Gemini (To cover Pro D2, LNH, Magnus...)
-    if api_key:
-        client = genai.Client(api_key=api_key)
+    key = os.getenv("GEMINI_API_KEY")
+    if key:
+        client = genai.Client(api_key=key)
         sys_prompt = get_niche_sports_extractor_prompt()
         try:
             # Use Semaphore to avoid RPS saturation
@@ -321,7 +322,8 @@ async def run_full_analysis(matches, force_refresh=False):
     NUCLEAR QUOTA PROTECTION: ONE CALL TO RULE THEM ALL.
     Now uses Persistent Cloud Cache to survive server restarts.
     """
-    if not api_key: return {"error": "API Key missing"}
+    key = os.getenv("GEMINI_API_KEY")
+    if not key: return {"error": "API Key missing in environment"}
     
     m_hash = get_matches_hash(matches)
     cache_key = f"full_analysis_{m_hash}"
@@ -331,9 +333,10 @@ async def run_full_analysis(matches, force_refresh=False):
         print(f"Using Cloud ANALYSIS_CACHE for {m_hash} (100% Quota Saving!)")
         return cached_data
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=key)
     prompt_data = build_prompt_data(matches[:12]) 
     
+    print(f"DEBUG: Using API Key starting with {key[:8]}...")    
     raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=True)
     
     if raw_res == "EXHAUSTED":
@@ -374,7 +377,8 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
 
 async def generate_daily_brief(matches):
     """Generates a high-level briefing for the day based on available matches."""
-    if not api_key: return "Clé API absente."
+    key = os.getenv("GEMINI_API_KEY")
+    if not key: return "Clé API absente."
     
     m_hash = get_matches_hash(matches)
     cache_key = f"journal_brief_{m_hash}"
@@ -384,7 +388,7 @@ async def generate_daily_brief(matches):
         print(f"Using Cloud JOURNAL_CACHE for {m_hash} (Quota Saving!)")
         return cached_brief
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=key)
     prompt_data = build_prompt_data(matches[:15]) # Limit to top 15 for conciseness
     
     sys_journal = """Tu es le 'Directeur des Opérations'. Ta mission est de donner un briefing matinal (Journal de Bord).

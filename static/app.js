@@ -288,8 +288,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 bookieDebate.innerHTML = '<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">🛑 <strong>Quota Google Dépassé (429)</strong><br>Le moteur d\'analyse est saturé. Veuillez patienter 60 secondes environ avant de relancer l\'analyse.</div>';
             } else {
                 runBtn.disabled = false;
-                runBtn.innerText = '🔄 Réessayer l\'Analyse';
-                bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">❌ <strong>Erreur Technique</strong><br>${error.message || "Une erreur est survenue lors de l'analyse."}</div>`;
+                if (error.message && error.message.includes("Erreur IA")) {
+                    runBtn.innerText = '❌ Clé API Invalide ou Erreur';
+                    bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">🛑 <strong>Erreur API Google</strong><br>${error.message}</div>`;
+                } else {
+                    runBtn.innerText = '🔄 Réessayer l\'Analyse';
+                    bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">❌ <strong>Erreur Technique</strong><br>${error.message || "Une erreur est survenue lors de l'analyse."}</div>`;
+                }
             }
         }
     });

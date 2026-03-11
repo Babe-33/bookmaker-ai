@@ -81,8 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Auto-load failed", e);
             matchesList.innerHTML = '<div class="empty-state">⚠️ Échec auto-chargement. Cliquez sur "Importer".</div>';
         }
-        loadBankroll();
-        loadDailyBrief();
+
+        // Wait for matches to load before requesting brief to avoid concurrent Gemini calls 
+        // hitting the 1 Request Per Second limit on a cold start.
+        await loadBankroll();
+        await loadDailyBrief();
     }
     initMatches();
 

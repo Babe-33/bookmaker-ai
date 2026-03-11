@@ -371,6 +371,15 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
 async def generate_daily_brief(matches):
     """Generates a high-level briefing for the day based on available matches."""
     if not api_key: return "Clé API absente."
+    
+    m_hash = get_matches_hash(matches)
+    cache_key = f"journal_brief_{m_hash}"
+    
+    cached_brief = get_cache(cache_key, ttl=3600) # 1 hour TTL
+    if cached_brief:
+        print(f"Using Cloud JOURNAL_CACHE for {m_hash} (Quota Saving!)")
+        return cached_brief
+
     client = genai.Client(api_key=api_key)
     prompt_data = build_prompt_data(matches[:15]) # Limit to top 15 for conciseness
     
@@ -380,7 +389,12 @@ async def generate_daily_brief(matches):
     3. FOCUS : Cite les 2 matchs les plus sûrs selon toi.
     SOIS TRÈS COURT ET PROFESSIONNEL."""
     
-    return await asyncio.to_thread(call_persona, client, sys_journal, f"Briefing du jour :\n{prompt_data}", False)
+    res = await asyncio.to_thread(call_persona, client, sys_journal, f"Briefing du jour :\n{prompt_data}", False)
+    
+    if res and res != "EXHAUSTED" and "Erreur" not in res:
+        set_cache(cache_key, res)
+        
+    return res
 
 async def run_ai_council(matches):
     """Legacy wrapper for backwards compat."""

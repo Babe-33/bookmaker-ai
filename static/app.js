@@ -1,4 +1,20 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Hidden Debug: Triple-click logo to clear Cloud Cache
+    let logoCount = 0;
+    const logoEl = document.querySelector('.logo');
+    if (logoEl) {
+        logoEl.addEventListener('click', async () => {
+            logoCount++;
+            if (logoCount >= 3) {
+                logoCount = 0;
+                if (confirm("Vider le Cache Cloud pour forcer une nouvelle analyse ?")) {
+                    await fetch('/api/matches?force_refresh=true');
+                    window.location.reload();
+                }
+            }
+            setTimeout(() => { logoCount = 0; }, 2000);
+        });
+    }
     // DOM Elements
     const fetchBtn = document.getElementById('fetchMatchesBtn');
     const runBtn = document.getElementById('runCouncilBtn');

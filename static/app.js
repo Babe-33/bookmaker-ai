@@ -227,57 +227,38 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDialogue.innerHTML = '';
 
         try {
-            // Simultaneous individual calls for better UX
-            const statPromise = fetch('/api/council/statistician').then(r => r.json());
-            const expertPromise = fetch('/api/council/expert').then(r => r.json());
-            const pessimistPromise = fetch('/api/council/pessimist').then(r => r.json());
-            const trendPromise = fetch('/api/council/trend').then(r => r.json());
+            // One single call for the entire council analysis (Phase 50)
+            const response = await fetch('/api/council/full');
+            const data = await response.json();
 
-            statPromise.then(data => {
-                let text = data?.text || "❌ Indisponible";
-                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
-                statResponse.innerHTML = formatMarkdown(text);
-                addChatBubble("📊 Statisticien", text);
-            });
-            expertPromise.then(data => {
-                let text = data?.text || "❌ Indisponible";
-                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
-                expertResponse.innerHTML = formatMarkdown(text);
-                addChatBubble("🧠 Expert", text);
-            });
-            pessimistPromise.then(data => {
-                let text = data?.text || "❌ Indisponible";
-                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
-                pessimistResponse.innerHTML = formatMarkdown(text);
-                addChatBubble("👿 Avocat du Diable", text);
-            });
-            trendPromise.then(data => {
-                let text = data?.text || "❌ Indisponible";
-                if (text === "EXHAUSTED") text = "⏳ Pause technique : Quota Google atteint. Réessayez dans quelques minutes.";
-                trendResponse.innerHTML = formatMarkdown(text);
-                addChatBubble("📈 Réseauteur", text);
-            });
+            if (data.error === "QUOTA_EXHAUSTED") {
+                throw new Error("QUOTA_EXHAUSTED");
+            }
 
-            const [s, e, p, t] = await Promise.all([statPromise, expertPromise, pessimistPromise, trendPromise]);
+            // Update all expert boxes at once
+            const statText = data.statistician || "❌ Indisponible";
+            statResponse.innerHTML = formatMarkdown(statText);
+            addChatBubble("📊 Statisticien", statText);
 
-            const ticketResponse = await fetch('/api/council/ticket', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    stat_text: s.text,
-                    expert_text: e.text,
-                    pessimist_text: p.text,
-                    trend_text: t.text
-                })
-            });
-            const ticketData = await ticketResponse.json();
-            renderTicket(ticketData.ticket);
+            const expertText = data.expert || "❌ Indisponible";
+            expertResponse.innerHTML = formatMarkdown(expertText);
+            addChatBubble("🧠 Expert", expertText);
+
+            const pessimistText = data.pessimist || "❌ Indisponible";
+            pessimistResponse.innerHTML = formatMarkdown(pessimistText);
+            addChatBubble("👿 Avocat du Diable", pessimistText);
+
+            const trendText = data.trend || "❌ Indisponible";
+            trendResponse.innerHTML = formatMarkdown(trendText);
+            addChatBubble("📈 Réseauteur", trendText);
+
+            // Update Ticket
+            renderTicket(data.ticket);
 
             runBtn.innerText = '✅ Analyse Terminée';
         } catch (error) {
             console.error(error);
-            // Implement 60s cooldown timer
-            let timeLeft = 60;
+            const isQuota = error.message === "QUOTA_EXHAUSTED" || error.status === 429;
             runBtn.disabled = true;
 
             const timer = setInterval(() => {
@@ -301,11 +282,14 @@ document.addEventListener('DOMContentLoaded', () => {
             ? matches
             : matches.filter(m => {
                 const s = m.sport.toLowerCase();
-                const comp = (m.competition || "").toLowerCase();
-                if (currentFilter === 'other') return !['football', 'rugby', 'basket', 'hockey', 'f1', 'biathlon', 'tennis'].some(k => s.includes(k));
+                const c = (m.competition || '').toLowerCase();
+                if (currentFilter === 'football') return s.includes('football') || s.includes('soccer') || c.includes('champions league') || c.includes('uefa');
+                if (currentFilter === 'rugby') return s.includes('rugby');
                 if (currentFilter === 'basket') return s.includes('basket') || s.includes('nba');
-                if (currentFilter === 'hockey') return s.includes('hockey') || s.includes('nhl');
-                if (currentFilter === 'uefa') return comp.includes('champion') || comp.includes('uefa');
+                if (currentFilter === 'tennis') return s.includes('tennis');
+                if (currentFilter === 'hockey') return s.includes('hockey');
+                if (currentFilter === 'f1') return s.includes('f1') || s.includes('ski') || s.includes('biathlon') || s.includes('tour de france');
+                if (currentFilter === 'other') return !['football', 'soccer', 'rugby', 'basket', 'nba', 'tennis', 'hockey', 'f1', 'ski'].some(str => s.includes(str));
                 return s.includes(currentFilter);
             });
 

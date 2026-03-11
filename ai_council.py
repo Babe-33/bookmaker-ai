@@ -166,15 +166,21 @@ async def fetch_live_web_data(force_refresh=False):
         try:
             # Use Semaphore to avoid RPS saturation
             async with GEMINI_SEMAPHORE:
+                # Log available models once to help debug 404
+                try:
+                    models = client.models.list()
+                    print("LOG: Available models for this key:")
+                    for m in models: print(f" - {m.name}")
+                except: pass
+
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-1.5-flash-latest",
+                    model="gemini-1.5-flash",
                     contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), the Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
                     config=types.GenerateContentConfig(
                         system_instruction=sys_prompt,
                         temperature=0.0,
-                        # Temporarily disabling search tool to debug 404
-                        # tools=[{"google_search": {}}]
+                        tools=[{"google_search": {}}]
                     ),
                 )
             
@@ -230,10 +236,10 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                 config_kwargs["tools"] = [{"google_search": {}}]
 
             try:
-                # Use gemini-1.5-flash-latest for best stability
+                # Use standard gemini-1.5-flash (no latest)
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-1.5-flash-latest",
+                    model="gemini-1.5-flash",
                     contents=match_data,
                     config=types.GenerateContentConfig(**config_kwargs)
                 )

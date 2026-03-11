@@ -141,8 +141,11 @@ async def get_council_stat():
 @app.get("/api/council/expert")
 async def get_council_expert():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    return {"text": await run_expert(current_matches_cache)}
+    try:
+        if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
+        return {"text": await run_expert(current_matches_cache)}
+    except Exception as e:
+        return {"text": f"Erreur Expert: {str(e)[:50]}"}
 
 @app.get("/api/council/pessimist")
 async def get_council_pessimist():
@@ -172,9 +175,18 @@ async def get_council_ticket(req: TicketRequest):
 @app.get("/api/council/full")
 async def get_council_all():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    result = await run_bookmaker(current_matches_cache)
-    return result
+    try:
+        if not current_matches_cache: 
+            current_matches_cache = await fetch_live_web_data()
+        
+        if not current_matches_cache:
+            return {"error": "Aucun match disponible pour l'analyse."}
+            
+        result = await run_bookmaker(current_matches_cache)
+        return result
+    except Exception as e:
+        print(f"Full analysis error: {e}")
+        return {"error": f"Erreur critique lors de l'analyse: {str(e)[:100]}"}
 
 # Serve the frontend statically
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -116,6 +116,28 @@ def get_matches_hash(matches):
     except:
         return "fallback_key"
 
+def extract_json(text):
+    """Robustly extracts JSON from potentially messy AI text."""
+    import re
+    # 1. Try markdown blocks
+    match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+    if match:
+        content = match.group(1).strip()
+        try: return json.loads(content)
+        except: pass
+    
+    # 2. Try simple brace matching
+    match = re.search(r'(\{.*\})', text, re.DOTALL)
+    if match:
+        content = match.group(1).strip()
+        try: return json.loads(content)
+        except: pass
+        
+    # 3. Last resort: dirty cleaning
+    cleaned = text.strip().replace('```json', '').replace('```', '').strip()
+    try: return json.loads(cleaned)
+    except: return None
+
 async def fetch_live_web_data(force_refresh=False):
     """
     Hybrid Scraper:
@@ -327,24 +349,18 @@ async def run_full_analysis(matches, force_refresh=False):
     if raw_res == "EXHAUSTED":
         return {"error": "QUOTA_EXHAUSTED"}
 
-    try:
-        # Extract JSON
-        raw = raw_res
-        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
-        
-        analysis_data = json.loads(raw.strip())
+    analysis_data = extract_json(raw_res)
+    if analysis_data:
         CONSOLIDATED_CACHE[m_hash] = {"data": analysis_data, "ts": now}
         return analysis_data
-    except Exception as e:
-        print(f"Error parsing master council JSON: {e}")
-        # Return fallback structure
+    else:
+        print(f"Failed to extract JSON from AI response: {raw_res[:200]}...")
         return {
             "statistician": "Erreur formatage Master Council.",
             "expert": "Erreur formatage Master Council.",
             "pessimist": "Erreur formatage Master Council.",
             "trend": "Erreur formatage Master Council.",
-            "ticket": {"debate": "Analyse échouée.", "main_ticket": {"total_odds": 0, "selections": []}}
+            "ticket": {"debate": "Analyse échouée (Format JSON invalide).", "main_ticket": {"total_odds": 0, "selections": []}}
         }
 
 async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):

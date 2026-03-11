@@ -166,13 +166,6 @@ async def fetch_live_web_data(force_refresh=False):
         try:
             # Use Semaphore to avoid RPS saturation
             async with GEMINI_SEMAPHORE:
-                # Log available models once to help debug 404
-                try:
-                    models = client.models.list()
-                    print("LOG: Available models for this key:")
-                    for m in models: print(f" - {m.name}")
-                except: pass
-
                 response = await asyncio.to_thread(
                     client.models.generate_content,
                     model="gemini-1.5-flash",
@@ -256,7 +249,17 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                         continue
                     else:
                         return "EXHAUSTED"
-                # Return the FULL error message to help user debug the 404
+                
+                # If 404, try to list models to help the user
+                if "404" in err_msg:
+                    try:
+                        ms = client.models.list()
+                        m_list = ", ".join([m.name.replace("models/", "") for m in ms])
+                        return f"Erreur IA 404. Modèles dispos : {m_list}"
+                    except:
+                        return f"Erreur IA 404 : Modèle introuvable et impossible de lister les modèles."
+
+                # Return the FULL error message to help user debug
                 return f"Erreur IA : {err_msg}"
 
 # Legacy alias

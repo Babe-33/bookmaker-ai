@@ -116,26 +116,31 @@ def get_matches_hash(matches):
         return "fallback_key"
 
 def extract_json(text):
-    """Robustly extracts JSON from potentially messy AI text."""
+    """Extremely robust extraction of JSON from AI text."""
     import re
-    # 1. Try markdown blocks
-    match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
-    if match:
-        content = match.group(1).strip()
-        try: return json.loads(content)
-        except: pass
+    if not text: return None
     
-    # 2. Try simple brace matching
-    match = re.search(r'(\{.*\})', text, re.DOTALL)
-    if match:
-        content = match.group(1).strip()
-        try: return json.loads(content)
-        except: pass
-        
-    # 3. Last resort: dirty cleaning
-    cleaned = text.strip().replace('```json', '').replace('```', '').strip()
-    try: return json.loads(cleaned)
-    except: return None
+    # Remove markdown code blocks if present
+    text = re.sub(r'```(?:json)?', '', text)
+    text = re.sub(r'```', '', text)
+    
+    # Try to find the first '{' and last '}'
+    start = text.find('{')
+    end = text.rfind('}')
+    
+    if start != -1 and end != -1 and end > start:
+        json_str = text[start:end+1]
+        try:
+            return json.loads(json_str)
+        except:
+            # Try to fix common JSON errors (like trailing commas)
+            try:
+                # Remove common trailing commas before closing braces/brackets
+                json_str = re.sub(r',\s*([\]}])', r'\1', json_str)
+                return json.loads(json_str)
+            except:
+                pass
+    return None
 
 async def fetch_live_web_data(force_refresh=False):
     """
@@ -281,28 +286,20 @@ def build_prompt_data(matches):
 
 # Personas Instructions - DEEP ANALYSIS
 # MASTER SYSTEM PROMPT - Consolidates all experts into one call
-SYSTEM_MASTER_COUNCIL = """Tu es le 'Conseil des Experts AI'. Ta mission est de réaliser une analyse COMPLÈTE de 360° sur les matchs fournis et de générer un ticket de pari optimal.
+SYSTEM_MASTER_COUNCIL = """Tu es une API JSON pure. Tu DOIS retourner UN SEUL OBJET JSON sans aucun texte avant ou après.
+Interdiction de mettre des blocs de code markdown (```json).
 
-Tu dois impérativement répondre avec un objet JSON qui contient les analyses de tes 4 experts internes :
-
-1. 'L'Analyste Opta' (Statisticien) : Utilise la logique Opta (xG, PPDA, transitions).
-2. 'L'Expert Terrain' : Forme, blessés, enjeux psychologiques.
-3. 'L'Avocat du Diable' : Détecte le biais public et les pièges des favoris trop populaires.
-4. 'Le Réseauteur' : Tendances mondiales et flux de paris.
-
-Enfin, tu agis comme le 'Bookmaker' pour créer le meilleur ticket (Main Ticket + Safe Ticket) en utilisant toutes ces expertises.
-
-STRUCTURE DU JSON ATTENDU :
+Structure :
 {
-    "statistician": "Texte court de l'analyse Opta...",
-    "expert": "Texte court de l'expert terrain...",
-    "pessimist": "Analyse des pièges...",
-    "trend": "Tendances mondiales...",
+    "statistician": "Analyse statistique (1 phrase)...",
+    "expert": "Analyse terrain (1 phrase)...",
+    "pessimist": "Analyse des risques (1 phrase)...",
+    "trend": "Tendances (1 phrase)...",
     "ticket": {
         "debate": "Résumé tactique global.",
         "main_ticket": {
             "total_odds": 5.42,
-            "selections": [{"match_name": "...", "prediction": "...", "odds": 2.10}]
+            "selections": [{"match_name": "Team A - Team B", "prediction": "Prediction", "odds": 1.50}]
         },
         "safe_ticket": {
             "total_odds": 1.75,
@@ -310,8 +307,7 @@ STRUCTURE DU JSON ATTENDU :
         }
     }
 }
-RÈGLE D'OR : UN SEUL JSON, PAS DE TEXTE AUTOUR. SOIS ULTRA-CONCIS DANS LES ANALYSES (1-2 phrases par match).
-"""
+Interdiction de dépasser 100 mots au total."""
 
 async def run_statistician(matches):
     res = await run_full_analysis(matches)

@@ -104,7 +104,8 @@ Renvoie UNIQUEMENT le JSON. Pas de texte.
 # 1. MATCH_CACHE (30 mins) for the niche sports scraping.
 # 2. ANALYSIS_CACHE (1 hour) for the AI persona responses.
 MATCH_CACHE = {"data": [], "timestamp": 0}
-ANALYSIS_CACHE = {}
+ANALYSIS_CACHE = {} 
+CONSOLIDATED_CACHE = {} # Stores full {stat, expert, pessimist, trend, ticket}
 
 def get_matches_hash(matches):
     """Creates a unique fingerprint for a set of matches to use as cache key."""
@@ -254,204 +255,112 @@ def build_prompt_data(matches):
     return prompt_data
 
 # Personas Instructions - DEEP ANALYSIS
-sys_stat = """Tu es 'L'Analyste Opta' (Spécialiste Data Profonde & Expected Goals). 
-RÈGLE D'OR (Stratégie Opta) : Utilise la logique d'Opta Analyst. Analyse non seulement les xG (Expected Goals), mais aussi l'intensité du pressing (PPDA), la qualité des séquences et les transitions offensives/défensives.
-ANOMALIE À RECHERCHER : Si une équipe produit un gros volume de jeu (séquences de 10+ passes) mais ne marque pas, elle est "due" pour un retour à la moyenne. C'est une opportunité de 'Value'.
-RÈGLE DE FORMATAGE : Pour chaque match, donne :
-1. ANALYSE OPTA DATA (1-2 phrases)
-2. NOTE DE CONFIANCE (X/10)"""
+# MASTER SYSTEM PROMPT - Consolidates all experts into one call
+SYSTEM_MASTER_COUNCIL = """Tu es le 'Conseil des Experts AI'. Ta mission est de réaliser une analyse COMPLÈTE de 360° sur les matchs fournis et de générer un ticket de pari optimal.
 
-sys_expert = """Tu es 'L'Expert Terrain'. Analyse la forme actuelle, les compos probables, blessés et l'enjeu psychologique (Maintien, Titre). 
-Focalise-toi sur le contenu du jeu et les "infos insiders" (L'Equipe, RMC).
-RÈGLE DE FORMATAGE : Pour chaque match, donne :
-1. ANALYSE (1-2 phrases)
-2. NOTE DE CONFIANCE (X/10)"""
+Tu dois impérativement répondre avec un objet JSON qui contient les analyses de tes 4 experts internes :
 
-sys_pessimist = """Tu es 'L'Avocat du Diable' ET le 'Détecteur de Biais Public'. 
-RÈGLE D'OR (Stratégie Anti-Public) : Les bookmakers baissent drastiquement les cotes des "Equipes Populaires" (PSG, Real Madrid, Lakers) car le grand public parie dessus aveuglément. 
-MISSION : Cherche systématiquement la FAILLE. Si une équipe favorite est trop soutenue par les "fans", sa cote est mathématiquement fausse. Trouve la valeur sur l'outsider (Handicap, Double Chance) et explique pourquoi le favori est un "Piège à pigeons".
-RÈGLE DE FORMATAGE : Pour chaque match, donne :
-1. ANALYSE DU PIÈGE / BIAIS PUBLIC (1-2 phrases)
-2. NOTE DE CONFIANCE (X/10)"""
+1. 'L'Analyste Opta' (Statisticien) : Utilise la logique Opta (xG, PPDA, transitions).
+2. 'L'Expert Terrain' : Forme, blessés, enjeux psychologiques.
+3. 'L'Avocat du Diable' : Détecte le biais public et les pièges des favoris trop populaires.
+4. 'Le Réseauteur' : Tendances mondiales et flux de paris.
 
-sys_trend = """Tu es 'Le Réseauteur'. Analyse les flux de paris mondiaux, les chutes de cotes et les tendances climatiques ou d'arbitrage.
-RÈGLE DE FORMATAGE : Pour chaque match, donne :
-1. ANALYSE (1-2 phrases)
-2. NOTE DE CONFIANCE (X/10)"""
+Enfin, tu agis comme le 'Bookmaker' pour créer le meilleur ticket (Main Ticket + Safe Ticket) en utilisant toutes ces expertises.
+
+STRUCTURE DU JSON ATTENDU :
+{
+    "statistician": "Texte court de l'analyse Opta...",
+    "expert": "Texte court de l'expert terrain...",
+    "pessimist": "Analyse des pièges...",
+    "trend": "Tendances mondiales...",
+    "ticket": {
+        "debate": "Résumé tactique global.",
+        "main_ticket": {
+            "total_odds": 5.42,
+            "selections": [{"match_name": "...", "prediction": "...", "odds": 2.10}]
+        },
+        "safe_ticket": {
+            "total_odds": 1.75,
+            "selections": []
+        }
+    }
+}
+RÈGLE D'OR : UN SEUL JSON, PAS DE TEXTE AUTOUR. SOIS ULTRA-CONCIS DANS LES ANALYSES (1-2 phrases par match).
+"""
 
 async def run_statistician(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
-    m_hash = get_matches_hash(matches)
-    cache_key = f"stat_{m_hash}"
-    now = time.time()
-    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
-        print("Using Cache for Statistician")
-        return ANALYSIS_CACHE[cache_key]['data']
-        
-    client = genai.Client(api_key=api_key)
-    prompt_data = build_prompt_data(matches)
-    res = await asyncio.to_thread(call_persona, client, sys_stat, f"Stats détaillées : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", True)
-    if res != "EXHAUSTED":
-        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
-    else:
-        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
-    return res
+    res = await run_full_analysis(matches)
+    return res.get("statistician", "Analyse indisponible.")
 
 async def run_expert(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
-    m_hash = get_matches_hash(matches)
-    cache_key = f"expert_{m_hash}"
-    now = time.time()
-    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
-        print("Using Cache for Expert")
-        return ANALYSIS_CACHE[cache_key]['data']
-        
-    client = genai.Client(api_key=api_key)
-    prompt_data = build_prompt_data(matches)
-    res = await asyncio.to_thread(call_persona, client, sys_expert, f"Infos RMC & blessés : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", True)
-    if res != "EXHAUSTED":
-        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
-    else:
-        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
-    return res
+    res = await run_full_analysis(matches)
+    return res.get("expert", "Analyse indisponible.")
 
 async def run_pessimist(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
-    m_hash = get_matches_hash(matches)
-    cache_key = f"pessimist_{m_hash}"
-    now = time.time()
-    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
-        print("Using Cache for Pessimist")
-        return ANALYSIS_CACHE[cache_key]['data']
-        
-    client = genai.Client(api_key=api_key)
-    prompt_data = build_prompt_data(matches)
-    res = await asyncio.to_thread(call_persona, client, sys_pessimist, f"Cherche les pièges : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", False)
-    if res != "EXHAUSTED":
-        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
-    else:
-        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
-    return res
+    res = await run_full_analysis(matches)
+    return res.get("pessimist", "Analyse indisponible.")
 
 async def run_trend(matches):
-    if not api_key: return "⚠️ Clé GEMINI_API_KEY absente."
-    m_hash = get_matches_hash(matches)
-    cache_key = f"trend_{m_hash}"
-    now = time.time()
-    if cache_key in ANALYSIS_CACHE and (now - ANALYSIS_CACHE[cache_key]['ts'] < 3600):
-        print("Using Cache for Trend")
-        return ANALYSIS_CACHE[cache_key]['data']
-        
-    client = genai.Client(api_key=api_key)
-    prompt_data = build_prompt_data(matches)
-    res = await asyncio.to_thread(call_persona, client, sys_trend, f"Tendances mondiales : SOIS ULTRA-CONCIS (1 phrase/match) :\n{prompt_data}", True)
-    if res != "EXHAUSTED":
-        ANALYSIS_CACHE[cache_key] = {"data": res, "ts": now}
-    else:
-        res = "⏳ (Quota Google dépassé. Attendez 1 minute.)"
-    return res
+    res = await run_full_analysis(matches)
+    return res.get("trend", "Analyse indisponible.")
 
-async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
+async def run_full_analysis(matches, force_refresh=False):
+    """
+    NUCLEAR QUOTA PROTECTION: ONE CALL TO RULE THEM ALL.
+    Consolidates 5 AI queries into 1.
+    """
     if not api_key: return {"error": "API Key missing"}
+    
+    m_hash = get_matches_hash(matches)
+    now = time.time()
+    
+    if not force_refresh and m_hash in CONSOLIDATED_CACHE:
+        if now - CONSOLIDATED_CACHE[m_hash]['ts'] < 3600:
+            print("Using CONSOLIDATED_CACHE (80% Quota Saving!)")
+            return CONSOLIDATED_CACHE[m_hash]['data']
+
     client = genai.Client(api_key=api_key)
-    prompt_data = build_prompt_data(matches)
+    prompt_data = build_prompt_data(matches[:12]) # Constant limit to avoid token blowout
     
-    # Run the 4 experts SEQUENTIALLY to stay strictly under the free tier quota
-    if not stat_response:
-        stat_response = await run_statistician(matches)
-        expert_response = await run_expert(matches)
-        pessimist_response = await run_pessimist(matches)
-        trend_response = await run_trend(matches)
-
-    # 5. Moi (Le Bookmaker / ticket final)
-    # Load bankroll for localized staking
-    db = {"bankroll": {"balance": 100.0}}
-    try:
-        with open("database.json", "r") as f: db = json.load(f)
-    except: pass
-    balance = db["bankroll"]["balance"]
-
-    sys_bookie = f"""Tu es l'Expert Bookmaker, ton unique but est la RENTABILITÉ MAXIMALE. 
-Ta mission : Créer le ticket parfait en utilisant toutes les données des experts.
-TON CAPITAL ACTUEL : {balance}€
-
-RÈGLES D'OR MISES À JOUR (Phase 47) :
-1. CHASSEUR DE VALUE : Compare la probabilité réelle avec les MAX ODDS.
-2. DOMINATION NICHE : Priorise les sports de niche (Rugby Pro D2, Handball Starligue, Hockey Magnus). Les bookmakers y font plus d'erreurs. Si tu trouves de la valeur ici, augmente le score de confiance.
-3. SUREBETS : Si un match est marqué "SUREBET", il DOIT être dans le ticket (C'est de l'argent gratuit).
-4. MARCHÉS AVANCÉS : Utilise toutes les cotes disponibles (Buteurs, Marqueurs d'essai, Différence de buts, Handicap) pour maximiser le ticket.
-5. SGP : Autorisé sur le même match.
-6. COMBINÉ SÉCURISÉ (SAFE) : Prépare un "Safe Ticket" (cote totale entre 1.50 et 2.00) avec les sélections les plus "béton".
-7. STAKING (KELLY) : Suggère une mise en % basée sur (Confiance vs Cote).
-
-Expertise reçue :
-Statisticien (xG) : {stat_response}
-Expert Terrain : {expert_response}
-Avocat du Diable (Biais Public) : {pessimist_response}
-Le Réseauteur : {trend_response}
-
-Retourne UN JSON avec DEUX tickets :
-{{
-    "debate": "Résumé tactique global.",
-    "main_ticket": {{
-        "total_odds": 5.42,
-        "suggested_stake_percent": "5%",
-        "suggested_stake_value": 12.5,
-        "selections": [
-            {{
-                "match_id": "ID",
-                "match_name": "Team A vs Team B",
-                "prediction": "Victoire A",
-                "odds": 2.10,
-                "confidence": "9/10",
-                "is_niche": true
-            }}
-        ]
-    }},
-    "safe_ticket": {{
-        "total_odds": 1.75,
-        "suggested_stake_percent": "10%",
-        "suggested_stake_value": 25.0,
-        "selections": []
-    }}
-}}
-"""
-    final_ticket_json_str = await asyncio.to_thread(call_persona, client, sys_bookie, prompt_data, False)
+    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=True)
     
-    import re
+    if raw_res == "EXHAUSTED":
+        return {"error": "QUOTA_EXHAUSTED"}
+
     try:
-        raw = final_ticket_json_str
+        # Extract JSON
+        raw = raw_res
         if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
         elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
         
-        try:
-            final_ticket = json.loads(raw.strip())
-        except json.JSONDecodeError:
-            # Fallback regex extraction if Gemini added conversational text around the JSON
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                final_ticket = json.loads(match.group(0))
-            else:
-                raise ValueError("No valid JSON object found in response.")
-                
-        # Fail-safe: ensure selections is a list to prevent frontend .forEach() crash
-        if not isinstance(final_ticket.get("selections"), list):
-            final_ticket["selections"] = []
-            
+        analysis_data = json.loads(raw.strip())
+        CONSOLIDATED_CACHE[m_hash] = {"data": analysis_data, "ts": now}
+        return analysis_data
     except Exception as e:
-        print(f"Error parse ticket json: {e}")
-        final_ticket = {
-            "debate": "Erreur lors de la création du ticket. L'IA a formaté sa réponse incorrectement ou le quota a été dépassé. Veuillez réessayer.", 
-            "total_odds": 0, 
-            "selections": []
+        print(f"Error parsing master council JSON: {e}")
+        # Return fallback structure
+        return {
+            "statistician": "Erreur formatage Master Council.",
+            "expert": "Erreur formatage Master Council.",
+            "pessimist": "Erreur formatage Master Council.",
+            "trend": "Erreur formatage Master Council.",
+            "ticket": {"debate": "Analyse échouée.", "main_ticket": {"total_odds": 0, "selections": []}}
         }
+
+async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
+    """
+    Updated to use the consolidated analysis.
+    """
+    data = await run_full_analysis(matches)
+    if "error" in data:
+        return {"error": data["error"]}
         
     return {
-        "statistician": stat_response,
-        "expert": expert_response,
-        "pessimist": pessimist_response,
-        "trend": trend_response,
-        "ticket": final_ticket
+        "statistician": data.get("statistician"),
+        "expert": data.get("expert"),
+        "pessimist": data.get("pessimist"),
+        "trend": data.get("trend"),
+        "ticket": data.get("ticket")
     }
 
 async def generate_daily_brief(matches):

@@ -165,9 +165,16 @@ class TicketRequest(BaseModel):
 @app.post("/api/council/ticket")
 async def get_council_ticket(req: TicketRequest):
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
     result = await run_bookmaker(current_matches_cache, req.stat_text, req.expert_text, req.pessimist_text, req.trend_text)
     return {"ticket": result["ticket"]}
+
+@app.get("/api/council/full")
+async def get_council_all():
+    global current_matches_cache
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
+    result = await run_bookmaker(current_matches_cache)
+    return result
 
 # Serve the frontend statically
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -291,11 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 runBtn.disabled = false;
                 if (error.message && error.message.includes("Erreur IA")) {
-                    runBtn.innerText = '❌ Clé API Invalide ou Erreur';
-                    bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">🛑 <strong>Erreur API Google</strong><br>${error.message}</div>`;
+                     runBtn.innerText = '❌ Erreur API Google';
+                     bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px; font-size: 0.8rem; overflow-wrap: break-word;">🛑 <strong>Détail Erreur Google</strong><br>${error.message}</div>`;
                 } else {
-                    runBtn.innerText = '🔄 Réessayer l\'Analyse';
-                    bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">❌ <strong>Erreur Technique</strong><br>${error.message || "Une erreur est survenue lors de l'analyse."}</div>`;
+                     runBtn.innerText = '🔄 Réessayer l\'Analyse';
+                     bookieDebate.innerHTML = `<div style="color: #ef4444; padding: 1rem; border: 1px dashed #ef4444; border-radius: 8px;">❌ <strong>Erreur Technique</strong><br>${error.message || "Une erreur est survenue lors de l'analyse."}</div>`;
                 }
             }
         }

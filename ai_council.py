@@ -349,7 +349,8 @@ async def run_full_analysis(matches, force_refresh=False):
     prompt_data = build_prompt_data(matches[:12]) 
     
     print(f"DEBUG: Using API Key starting with {key[:8]}...")    
-    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=True)
+    # DISABLING SEARCH TEMPORARILY TO CLEAR THE 404 ERROR (Some regions/keys don't support it yet)
+    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=False)
     
     if raw_res == "EXHAUSTED":
         return {"error": "QUOTA_EXHAUSTED"}
@@ -409,7 +410,7 @@ async def generate_daily_brief(matches):
     3. FOCUS : Cite les 2 matchs les plus sûrs selon toi.
     SOIS TRÈS COURT ET PROFESSIONNEL."""
     
-    res = await asyncio.to_thread(call_persona, client, sys_journal, f"Briefing du jour :\n{prompt_data}", False)
+    res = await call_persona(client, sys_journal, f"Briefing du jour :\n{prompt_data}", False)
     
     if res and res != "EXHAUSTED" and "Erreur" not in res:
         set_cache(cache_key, res)

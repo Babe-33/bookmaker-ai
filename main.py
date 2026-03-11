@@ -121,7 +121,7 @@ async def handle_ticket_action(data: TicketAction):
 async def get_matches(force_refresh: bool = False):
     global current_matches_cache
     if not current_matches_cache or force_refresh:
-        new_matches = fetch_live_web_data(force_refresh)
+        new_matches = await fetch_live_web_data(force_refresh)
         if new_matches or not current_matches_cache:
             current_matches_cache = new_matches
     return {"matches": current_matches_cache}
@@ -129,31 +129,31 @@ async def get_matches(force_refresh: bool = False):
 @app.get("/api/journal/brief")
 async def get_daily_brief():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
     return {"text": await generate_daily_brief(current_matches_cache)}
 
 @app.get("/api/council/statistician")
 async def get_council_stat():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
     return {"text": await run_statistician(current_matches_cache)}
 
 @app.get("/api/council/expert")
 async def get_council_expert():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
     return {"text": await run_expert(current_matches_cache)}
 
 @app.get("/api/council/pessimist")
 async def get_council_pessimist():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
     return {"text": await run_pessimist(current_matches_cache)}
 
 @app.get("/api/council/trend")
 async def get_council_trend():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = fetch_live_web_data()
+    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
     return {"text": await run_trend(current_matches_cache)}
 
 class TicketRequest(BaseModel):

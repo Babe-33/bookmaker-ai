@@ -115,7 +115,7 @@ def get_matches_hash(matches):
     except:
         return "fallback_key"
 
-def fetch_live_web_data(force_refresh=False):
+async def fetch_live_web_data(force_refresh=False):
     """
     Hybrid Scraper:
     1. Gets 100% real matches and odds from ESPN API.

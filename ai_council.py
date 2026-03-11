@@ -168,12 +168,13 @@ async def fetch_live_web_data(force_refresh=False):
             async with GEMINI_SEMAPHORE:
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-1.5-flash",
+                    model="gemini-1.5-flash-latest",
                     contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), the Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
                     config=types.GenerateContentConfig(
                         system_instruction=sys_prompt,
                         temperature=0.0,
-                        tools=[{"google_search": {}}]
+                        # Temporarily disabling search tool to debug 404
+                        # tools=[{"google_search": {}}]
                     ),
                 )
             
@@ -229,9 +230,10 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                 config_kwargs["tools"] = [{"google_search": {}}]
 
             try:
+                # Use gemini-1.5-flash-latest for best stability
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-1.5-flash",
+                    model="gemini-1.5-flash-latest",
                     contents=match_data,
                     config=types.GenerateContentConfig(**config_kwargs)
                 )
@@ -248,7 +250,8 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                         continue
                     else:
                         return "EXHAUSTED"
-                return f"Erreur IA : {err_msg[:50]}..."
+                # Return the FULL error message to help user debug the 404
+                return f"Erreur IA : {err_msg}"
 
 # Legacy alias
 async def call_persona(*args, **kwargs):

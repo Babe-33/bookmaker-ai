@@ -94,7 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/journal/brief');
             const data = await res.json();
-            if (data.text) {
+            if (data.error) {
+                briefContent.innerHTML = `<span style="color: #ef4444;">⚠️ Erreur Journal : ${data.error}</span>`;
+            } else if (data.text) {
                 briefContent.innerHTML = formatMarkdown(data.text);
                 briefContent.classList.remove('empty-state');
                 briefContent.style.fontStyle = 'normal';

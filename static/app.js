@@ -39,6 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const statNetProfit = document.getElementById('stat-net-profit');
     const historyList = document.getElementById('history-list');
 
+    // Bankroll Modal
+    const bankrollModal = document.getElementById('bankrollModal');
+    const configBtn = document.getElementById('config-bankroll-btn');
+    const saveBankrollBtn = document.getElementById('saveBankrollBtn');
+    const closeBankrollBtn = document.getElementById('closeBankrollBtn');
+    const bankrollInput = document.getElementById('bankrollInput');
+
     // Security
     const overlay = document.getElementById('securityOverlay');
     const passInput = document.getElementById('passphraseInput');
@@ -184,15 +191,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStatsUI(stats) {
-        bankrollValue.innerText = `${stats.balance.toFixed(2)}€`;
-        roiBadge.innerText = `ROI: ${stats.roi >= 0 ? '+' : ''}${stats.roi}%`;
-        roiBadge.style.color = stats.roi >= 0 ? '#10b981' : '#ef4444';
+        if (!stats) return;
+        const bal = typeof stats.balance === 'number' ? stats.balance : (typeof stats.current_balance === 'number' ? stats.current_balance : 0);
+        const roi = typeof stats.roi === 'number' ? stats.roi : 0;
+        const profit = typeof stats.net_profit === 'number' ? stats.net_profit : 0;
+        const staked = typeof stats.total_staked === 'number' ? stats.total_staked : 0;
+
+        bankrollValue.innerText = `${bal.toFixed(2)}€`;
+        roiBadge.innerText = `ROI: ${roi >= 0 ? '+' : ''}${roi}%`;
+        roiBadge.style.color = roi >= 0 ? '#10b981' : '#ef4444';
         
-        statTotalBets.innerText = stats.total_bets;
-        statWinRate.innerText = `${stats.win_rate}%`;
-        statTotalStaked.innerText = `${stats.total_staked.toFixed(2)}€`;
-        statNetProfit.innerText = `${stats.net_profit.toFixed(2)}€`;
-        statNetProfit.style.color = stats.net_profit >= 0 ? '#10b981' : '#ef4444';
+        statTotalBets.innerText = stats.total_bets || 0;
+        statWinRate.innerText = `${stats.win_rate || 0}%`;
+        statTotalStaked.innerText = `${staked.toFixed(2)}€`;
+        statNetProfit.innerText = `${profit.toFixed(2)}€`;
+        statNetProfit.style.color = profit >= 0 ? '#10b981' : '#ef4444';
+
+        // Update strategy stats if they exist
+        if (stats.by_strategy) {
+            if (document.getElementById('stat-safe-roi')) document.getElementById('stat-safe-roi').innerText = `ROI: ${stats.by_strategy.safe?.profit >= 0 ? '+' : ''}${stats.by_strategy.safe?.profit.toFixed(2)}€`;
+            if (document.getElementById('stat-balanced-roi')) document.getElementById('stat-balanced-roi').innerText = `ROI: ${stats.by_strategy.balanced?.profit >= 0 ? '+' : ''}${stats.by_strategy.balanced?.profit.toFixed(2)}€`;
+            if (document.getElementById('stat-risky-roi')) document.getElementById('stat-risky-roi').innerText = `ROI: ${stats.by_strategy.risky?.profit >= 0 ? '+' : ''}${stats.by_strategy.risky?.profit.toFixed(2)}€`;
+        }
     }
 
     async function loadHistory() {
@@ -296,17 +316,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             div.innerHTML = `
-                <div class="match-card-content" style="display: flex; flex-direction: column; gap: 0.8rem; width: 100%;">
-                    <div class="match-header" style="display: flex; justify-content: space-between; font-size: 0.75rem; opacity: 0.7; font-weight: 800; text-transform: uppercase;">
-                        <span>${match.sport} • ${match.competition}</span>
-                        <span>${formatDate(match.date)}</span>
+                <div class="match-card-content">
+                    <div class="match-header">
+                        <span class="m-comp">${match.sport} • ${match.competition}</span>
+                        <span class="m-date">${formatDate(match.date)}</span>
                     </div>
-                    <div class="match-teams" style="font-size: 1.15rem; font-weight: 800; color: #fff; margin: 0.2rem 0;">
-                        ${match.homeTeam} vs ${match.awayTeam}
-                    </div>
-                    <div class="match-odds" style="display: flex; gap: 0.5rem;">
-                        ${oddsHtml}
-                    </div>
+                    <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
+                    <div class="match-odds">${oddsHtml}</div>
                     ${predictionHtml}
                 </div>
             `;
@@ -368,11 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
             pessimistResponse.innerHTML = formatMarkdown(data.pessimist);
             trendResponse.innerHTML = formatMarkdown(data.trend);
 
-            addChatBubble("📊 Statisticien", data.statistician);
-            addChatBubble("🧠 Expert", data.expert);
-            addChatBubble("👿 Avocat", data.pessimist);
-            addChatBubble("📈 Réseauteur", data.trend);
-
             if (data.predictions) {
                 aiPredictions = data.predictions;
                 renderMatches(currentMatches); // Update match items with advice
@@ -386,6 +397,31 @@ document.addEventListener('DOMContentLoaded', () => {
             runBtn.disabled = false;
             bookieDebate.innerHTML = `<div style="color: #ef4444;">❌ Erreur: ${error.message}</div>`;
         }
+    });
+
+    // Bankroll Config
+    configBtn.addEventListener('click', () => {
+        bankrollModal.style.display = 'flex';
+    });
+    closeBankrollBtn.addEventListener('click', () => {
+        bankrollModal.style.display = 'none';
+    });
+    saveBankrollBtn.addEventListener('click', async () => {
+        const amount = parseFloat(bankrollInput.value);
+        if (isNaN(amount) || amount <= 0) return alert("Veuillez entrer un montant valide.");
+        
+        try {
+            const res = await fetch('/api/bankroll/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_balance: amount })
+            });
+            if (res.ok) {
+                alert("Capital mis à jour !");
+                bankrollModal.style.display = 'none';
+                loadBankrollStats();
+            }
+        } catch (e) { alert("Erreur lors de la mise à jour."); }
     });
 
     initMatches();

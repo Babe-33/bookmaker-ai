@@ -244,7 +244,7 @@ header::after {
 }
 
 .match-item {
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.7);
     border: 1px solid var(--panel-border);
     padding: 1.25rem;
     border-radius: 16px;
@@ -253,8 +253,25 @@ header::after {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    min-height: 120px; /* Restore and improve min-height */
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.match-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    width: 100%;
+}
+
+.match-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    opacity: 0.7;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 0.2rem;
 }
 
 .match-item:hover {
@@ -291,11 +308,12 @@ header::after {
 }
 
 .match-teams {
-    font-weight: 700;
-    margin-bottom: 0.75rem;
-    font-size: 1.1rem;
-    color: #ffffff !important;
-    display: block !important;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #ffffff;
+    line-height: 1.3;
+    display: block;
+    margin: 0.2rem 0;
 }
 
 .match-odds {
@@ -907,6 +925,39 @@ header::after {
 
 .status-lost {
     color: #ef4444;
+}
+
+/* AI Advice Bubble - Standardized */
+.ai-advice-bubble {
+    margin-top: 0.5rem;
+    padding: 1rem;
+    background: rgba(139, 92, 246, 0.15); /* Slightly more opaque */
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-left: 4px solid #8b5cf6;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    display: block !important; /* Ensure block flow */
+    position: relative !important;
+    clear: both;
+}
+
+.ai-advice-bubble .advice-header {
+    font-weight: 800;
+    color: #a78bfa;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-family: 'Outfit';
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.ai-advice-bubble .advice-reason {
+    opacity: 0.95;
+    font-style: italic;
+    color: #e2e8f0;
+    line-height: 1.4;
 }
 
 .btn-result {

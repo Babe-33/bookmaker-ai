@@ -172,10 +172,63 @@
                     </details>
                 </section>
 
-                    <h2 style="margin-bottom: 1rem;">📜 Historique des Tickets</h2>
-                    <div id="historyList" class="history-list"
-                        style="display: flex; flex-direction: column; gap: 1rem; max-height: 400px; overflow-y: auto;">
-                        <div class="empty-state">Aucun historique disponible.</div>
+                <!-- Triple Ticket Strategy -->
+                <section class="tickets-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    
+                    <!-- SAFE TICKET -->
+                    <div class="glass-panel ticket-card" id="card-safe" style="border-top: 4px solid #10b981;">
+                        <div class="ticket-type-header">
+                            <span class="badge" style="background: #10b981;">CONSEIL SÛR</span>
+                            <div class="odds-val" id="safe-odds">x 0.00</div>
+                        </div>
+                        <h3>🛡️ Safe Strategy</h3>
+                        <div id="safe-list" class="mini-ticket-list">En attente...</div>
+                        <div class="stake-info">Mise suggérée: <span id="safe-stake">0.00€</span></div>
+                        <button class="btn cta play-bet-btn" data-type="safe" id="btn-play-safe" disabled>Parier ce Ticket</button>
+                    </div>
+
+                    <!-- BALANCED TICKET -->
+                    <div class="glass-panel ticket-card" id="card-balanced" style="border-top: 4px solid #3b82f6;">
+                        <div class="ticket-type-header">
+                            <span class="badge" style="background: #3b82f6;">VALEUR / RENTABLE</span>
+                            <div class="odds-val" id="balanced-odds">x 0.00</div>
+                        </div>
+                        <h3>📊 Balanced Strategy</h3>
+                        <div id="balanced-list" class="mini-ticket-list">En attente...</div>
+                        <div class="stake-info">Mise suggérée: <span id="balanced-stake">0.00€</span></div>
+                        <button class="btn cta play-bet-btn" data-type="balanced" id="btn-play-balanced" disabled>Parier ce Ticket</button>
+                    </div>
+
+                    <!-- RISKY TICKET -->
+                    <div class="glass-panel ticket-card" id="card-risky" style="border-top: 4px solid #f59e0b;">
+                        <div class="ticket-type-header">
+                            <span class="badge" style="background: #f59e0b;">GROS GAIN</span>
+                            <div class="odds-val" id="risky-odds">x 0.00</div>
+                        </div>
+                        <h3>🔥 High Risk Strategy</h3>
+                        <div id="risky-list" class="mini-ticket-list">En attente...</div>
+                        <div class="stake-info">Mise suggérée: <span id="risky-stake">0.00€</span></div>
+                        <button class="btn cta play-bet-btn" data-type="risky" id="btn-play-risky" disabled>Parier ce Ticket</button>
+                    </div>
+
+                </section>
+
+                <!-- History & Stats -->
+                <section class="glass-panel highlight-panel" style="margin-bottom: 3rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+                        <h2 style="margin: 0;">📈 Historique & Statistiques</h2>
+                        <div id="roi-badge" style="font-weight: bold; font-family: 'Outfit'; color: #10b981; font-size: 1.2rem;">ROI: 0%</div>
+                    </div>
+                    
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                        <div class="stat-item"><span class="label">Paris Totaux</span><span class="val" id="stat-total-bets">0</span></div>
+                        <div class="stat-item"><span class="label">Taux Succès</span><span class="val" id="stat-win-rate">0%</span></div>
+                        <div class="stat-item"><span class="label">Mises Totales</span><span class="val" id="stat-total-staked">0€</span></div>
+                        <div class="stat-item"><span class="label">Profit Net</span><span class="val" id="stat-net-profit">0€</span></div>
+                    </div>
+
+                    <div id="history-list" class="history-list" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                        <div style="text-align: center; color: #94a3b8; padding: 2rem;">Aucun pari enregistré.</div>
                     </div>
                 </section>
             </div>

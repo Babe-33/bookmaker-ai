@@ -752,3 +752,163 @@ header::after {
         opacity: 1;
     }
 }
+
+/* Triple Ticket Strategy Styles */
+.ticket-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+}
+
+.ticket-type-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 0.7rem;
+    color: white;
+    text-transform: uppercase;
+}
+
+.odds-val {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: white;
+    font-family: 'Outfit';
+}
+
+.mini-ticket-list {
+    flex-grow: 1;
+    margin: 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    font-size: 0.9rem;
+}
+
+.mini-selection {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.6rem;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+}
+
+.mini-selection .m-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: block;
+}
+
+.mini-selection .m-bet {
+    color: var(--success);
+    font-weight: 700;
+    margin-right: 5px;
+}
+
+.mini-selection .m-odd {
+    opacity: 0.6;
+    font-size: 0.8rem;
+}
+
+.stake-info {
+    margin-bottom: 1.25rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 1rem;
+}
+
+.stake-info span {
+    color: white;
+    font-weight: 700;
+    font-family: 'Outfit';
+}
+
+/* History & Stats Styles */
+.stat-item {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1px solid var(--panel-border);
+}
+
+.stat-item .label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+
+.stat-item .val {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: white;
+    font-family: 'Outfit';
+}
+
+.history-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--panel-border);
+    padding: 1rem;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+}
+
+.history-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.history-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.history-date {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.history-type {
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+}
+
+.history-profit {
+    font-family: 'Outfit';
+    font-weight: 800;
+    font-size: 1.1rem;
+}
+
+.status-pending {
+    color: #f59e0b;
+}
+
+.status-won {
+    color: #10b981;
+}
+
+.status-lost {
+    color: #ef4444;
+}
+
+.btn-result {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+}

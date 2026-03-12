@@ -2,62 +2,53 @@ import os
 import json
 import asyncio
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+import google.generativeai as genai
 from persistence import get_cache, set_cache, load_db
 from real_matches_scraper import scrape_real_matches
-from google import genai
-from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Global Concurrency Semaphore
-GEMINI_SEMAPHORE = asyncio.Semaphore(1)
+# Global WORKING_MODEL to avoid repeated 404s
+_WORKING_MODEL = None
+STABLE_MODELS = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
 
-async def call_persona_with_retry(client, system_prompt, match_data, use_search=False):
-    """Simplified Bimodal Fallback: tries 2.0-flash, then 1.5-flash on failure."""
-    if not client: return "Clé API absente."
+async def call_persona_with_retry(prompt, data_context):
+    """Legacy SDK version with robust multi-model fallback."""
+    global _WORKING_MODEL
+    key = os.getenv("GEMINI_API_KEY")
+    if not key: return "Erreur: Clé API manquante."
     
-    async with GEMINI_SEMAPHORE:
-        # First attempt: 2.0-flash
+    # Strip quotes if they were mistakenly kept in .env
+    key = key.strip('"').strip("'")
+    genai.configure(api_key=key)
+    
+    models_to_try = [_WORKING_MODEL] if _WORKING_MODEL else STABLE_MODELS
+    
+    last_error = "Aucun modèle n'a répondu."
+    for model_name in models_to_try:
+        if not model_name: continue
         try:
-            config = {"temperature": 0.1}
-            if use_search: config["tools"] = [{"google_search": {}}]
+            model = genai.GenerativeModel(model_name)
+            full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
             
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.0-flash",
-                contents=match_data,
-                config=types.GenerateContentConfig(system_instruction=system_prompt, **config)
-            )
-            if response.text: return response.text
+            # Use to_thread to keep FastAPI async loop non-blocking
+            response = await asyncio.to_thread(model.generate_content, full_prompt)
+            if response.text:
+                _WORKING_MODEL = model_name
+                return response.text
         except Exception as e:
-            # Second attempt: 1.5-flash
-            try:
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model="gemini-1.5-flash",
-                    contents=match_data,
-                    config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.1)
-                )
-                if response.text: return response.text
-            except: pass
+            err = str(e).lower()
+            last_error = str(e)
+            if "404" in err or "not found" in err:
+                continue # Try next model
+            if "429" in err or "quota" in err:
+                return "ERROR:QUOTA"
+            # If 400 or other, keep trying next models just in case
+            continue
             
-            err_msg = str(e).lower()
-            if "quota" in err_msg or "429" in err_msg: return "ERROR:QUOTA"
-            return f"Erreur IA: {str(e)[:50]}"
-            
-    return "Aucune réponse de l'IA."
-
-def get_base_extractor_prompt():
-    today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
-    return f"""
-Tu es un extracteur de données sportives en temps réel EXTRÊMEMENT RIGOUREUX. Navigue sur internet pour trouver les VRAIS événements sportifs prévus EXACTEMENT pour aujourd'hui ({today}) ou ce week-end.
-Cherche AU MOINS 15 à 20 événements réels. Renvoie UNIQUEMENT un JSON valide.
-"""
-
-def get_niche_sports_extractor_prompt():
-    return """Tu es un expert en sports de niche français. Trouve les matchs Pro D2, LNH, Magnus pour aujourd'hui. Renvoie un JSON."""
+    return f"Erreur IA : {last_error[:100]}"
 
 def get_matches_hash(matches):
     try:
@@ -81,78 +72,78 @@ def extract_json(text):
     return None
 
 async def fetch_live_web_data(force_refresh=False):
-    """Hybrid Scraper: ESPN API + niche fallback."""
-    cached = get_cache("match_cache_v10", ttl=21600)
+    cached = get_cache("match_cache_v20", ttl=21600)
     if not force_refresh and cached: return cached
-
-    matches = []
     try:
-        matches.extend(scrape_real_matches(force_refresh=force_refresh))
-    except: pass
-
-    key = os.getenv("GEMINI_API_KEY")
-    if key:
-        try:
-            client = genai.Client(api_key=key)
-            res = await call_persona_with_retry(client, "Trouve les matchs sportifs du jour en France (Pro D2, LNH, Magnus).", "Scraping", use_search=True)
-            n_data = extract_json(res)
-            if n_data and "matches" in n_data: matches.extend(n_data["matches"])
-        except: pass
+        matches = scrape_real_matches(force_refresh=force_refresh)
+    except Exception as e:
+        print(f"Scraper error: {e}")
+        matches = []
         
-    if matches: set_cache("match_cache_v10", matches)
+    if matches: set_cache("match_cache_v20", matches)
     return matches
 
-async def call_persona(*args, **kwargs):
-    return await call_persona_with_retry(*args, **kwargs)
-
-def build_prompt_data(matches):
-    prompt_data = "Matchs du jour :\n"
-    for m in matches:
+def build_match_context(matches):
+    ctx = "Voici les matchs réels du jour :\n"
+    for m in matches[:15]: # Limit to top 15 for a good balance of speed/quality
         odds = m.get('odds', {})
-        prompt_data += f"- ID {m['id']} | {m['sport']} : {m['homeTeam']} vs {m['awayTeam']} | Cotes 1N2: {odds.get('1','-')}/{odds.get('N','-')}/{odds.get('2','-')}\n"
-    return prompt_data
+        ctx += f"- {m.get('homeTeam')} vs {m.get('awayTeam')} | Sport: {m.get('sport')} | Comp: {m.get('competition')} | ID: {m.get('id')} | Cotes: {odds.get('1')}/{odds.get('N')}/{odds.get('2')}\n"
+    return ctx
 
-SYSTEM_MASTER_COUNCIL = """Tu es une API de pronostics sportifs. Retourne UN SEUL OBJET JSON pur.
-Structure : {
-  "statistician": "...", "expert": "...", "pessimist": "...", "trend": "...",
-  "predictions": { "ID": {"bet": "...", "confidence": 80, "reason": "..."} },
-  "tickets": { "safe": {...}, "balanced": {...}, "risky": {...} }
-}"""
+SYSTEM_MASTER_COUNCIL = """Tu es une IA de pronostics sportifs de précision. Analyse les matchs fournis et retourne UN SEUL OBJET JSON pur.
+Structure attendue :
+{
+  "statistician": "Analyse chiffrée courte...",
+  "expert": "Analyse tactique courte...",
+  "pessimist": "Mise en garde sur les pièges...",
+  "trend": "Analyse des cotes et du marché...",
+  "predictions": {
+    "ID_DU_MATCH": {"bet": "Pari suggéré (ex: 1, N, 2, Buteur X)", "confidence": 85, "reason": "Pourquoi ?"}
+  },
+  "tickets": {
+    "safe": {"total_odds": 2.10, "suggested_stake": 5, "selections": [{"match": "Nom", "bet": "X", "odds": 1.45}]},
+    "balanced": {"total_odds": 5.50, "suggested_stake": 2, "selections": [...]},
+    "risky": {"total_odds": 15.0, "suggested_stake": 1, "selections": [...]}
+  }
+}
+RÈGLE D'OR : Ne propose QUE des matchs présents dans la liste avec leur ID correct."""
 
 async def run_full_analysis(matches, force_refresh=False):
-    key = os.getenv("GEMINI_API_KEY")
-    if not key: return {"error": "API Key missing"}
+    if not matches: return {"error": "Aucun match à analyser."}
     
     m_hash = get_matches_hash(matches)
-    cache_key = f"full_analysis_emergency_v10_{m_hash}"
-    cached_data = get_cache(cache_key, ttl=3600)
-    if not force_refresh and cached_data: return cached_data
+    cache_key = f"analysis_phase67_stable_v1_{m_hash}"
+    cached = get_cache(cache_key, ttl=3600)
+    if not force_refresh and cached: return cached
 
-    client = genai.Client(api_key=key)
-    # LIMIT TO 6 MATCHES FOR SPEED
-    prompt_data = build_prompt_data(matches[:6]) 
-    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data)
+    context = build_match_context(matches)
+    res = await call_persona_with_retry(SYSTEM_MASTER_COUNCIL, context)
     
-    if "ERROR:QUOTA" in str(raw_res): return {"error": "QUOTA_EXHAUSTED"}
+    if "ERROR:QUOTA" in res: return {"error": "Quota Gemini épuisé. Réessayez demain."}
+    if res.startswith("Erreur IA"): return {"error": res}
     
-    data = extract_json(raw_res)
+    data = extract_json(res)
     if data:
+        # Data validation to prevent frontend crashes
+        if "tickets" not in data: data["tickets"] = {}
+        for cat in ["safe", "balanced", "risky"]:
+            if cat not in data["tickets"]: data["tickets"][cat] = {"total_odds": 0, "suggested_stake": 0, "selections": []}
+            
         set_cache(cache_key, data)
         return data
-    return {"error": "Erreur de formatage IA."}
+        
+    return {"error": "Formatage IA corrompu. Relancez l'analyse."}
 
 async def run_bookmaker(matches):
     return await run_full_analysis(matches)
 
 async def generate_daily_brief(matches):
-    key = os.getenv("GEMINI_API_KEY")
-    if not key: return "Clé absente."
-    client = genai.Client(api_key=key)
-    res = await call_persona_with_retry(client, "Fais un court résumé des opportunités du jour.", build_prompt_data(matches[:10]))
+    if not matches: return "Pas de matchs aujourd'hui."
+    prompt = "Tu es le Directeur. Fais un briefing très court (3 phrases) sur les opportunités du jour."
+    res = await call_persona_with_retry(prompt, build_match_context(matches[:6]))
     return res
 
-async def run_ai_council(matches):
-    return await run_bookmaker(matches)
+# Legacy wrappers for main.py compatibility
 async def run_statistician(matches):
     res = await run_full_analysis(matches)
     return res.get("statistician", "Analyse indisponible.")
@@ -165,3 +156,5 @@ async def run_pessimist(matches):
 async def run_trend(matches):
     res = await run_full_analysis(matches)
     return res.get("trend", "Analyse indisponible.")
+async def run_ai_council(matches):
+    return await run_bookmaker(matches)

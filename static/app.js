@@ -293,7 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDate(dateStr) {
         if (!dateStr) return "";
-        return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr; // Si invalide, on renvoie la string brute (ex: "Ce soir")
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     }
 
     function addChatBubble(name, text) {

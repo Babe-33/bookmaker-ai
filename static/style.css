@@ -255,6 +255,8 @@ header::after {
     flex-direction: column;
     width: 100%;
     margin-bottom: 1rem;
+    min-height: fit-content; /* Ensure it grows with content */
+    overflow: visible; /* Allow advice bubbles to be seen fully */
 }
 
 .match-card-content {
@@ -267,11 +269,13 @@ header::after {
 .match-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.75rem;
-    opacity: 0.7;
+    opacity: 0.8;
     font-weight: 800;
     text-transform: uppercase;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
 }
 
 .match-item:hover {
@@ -296,16 +300,7 @@ header::after {
     font-weight: bold;
 }
 
-.match-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 600;
-}
+/* Standardized header style used above */
 
 .match-teams {
     font-weight: 800;

@@ -296,13 +296,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             div.innerHTML = `
-                <div class="match-header">
-                    <span>${match.sport} • ${match.competition}</span>
-                    <span>${formatDate(match.date)}</span>
+                <div class="match-card-content" style="display: flex; flex-direction: column; gap: 0.8rem; width: 100%;">
+                    <div class="match-header" style="display: flex; justify-content: space-between; font-size: 0.75rem; opacity: 0.7; font-weight: 800; text-transform: uppercase;">
+                        <span>${match.sport} • ${match.competition}</span>
+                        <span>${formatDate(match.date)}</span>
+                    </div>
+                    <div class="match-teams" style="font-size: 1.15rem; font-weight: 800; color: #fff; margin: 0.2rem 0;">
+                        ${match.homeTeam} vs ${match.awayTeam}
+                    </div>
+                    <div class="match-odds" style="display: flex; gap: 0.5rem;">
+                        ${oddsHtml}
+                    </div>
+                    ${predictionHtml}
                 </div>
-                <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
-                <div class="match-odds">${oddsHtml}</div>
-                ${predictionHtml}
             `;
             matchesList.appendChild(div);
         });

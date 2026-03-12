@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentMatches = [];
     let currentFilter = 'all';
+    let aiPredictions = {};
 
     // Toggle analysis visibility
     togglePersonasBtn.addEventListener('click', () => {
@@ -152,15 +153,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     stake: ticket.suggested_stake
                 })
             });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({ detail: "Réponse non-JSON du serveur (Possible 404)" }));
+                alert(`❌ Erreur ${response.status}: ${errData.detail || response.statusText}`);
+                return;
+            }
+
             const res = await response.json();
             if (res.status === 'success') {
                 alert("✅ Pari enregistré !");
                 updateStatsUI(res.stats);
                 loadHistory();
-            } else {
-                alert("❌ Erreur: " + res.detail);
             }
-        } catch (e) { alert("Erreur technique lors du placement."); }
+        } catch (e) {
+            console.error("Bet placement error:", e);
+            alert(`Erreur technique : ${e.message}\nAssurez-vous que main.py et persistence.py sont à jour sur GitHub.`);
+        }
     }
 
     // --- Bankroll & Stats ---
@@ -270,6 +279,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (match.odds[k] && match.odds[k] !== "-") oddsHtml += `<div class="odd-btn">${k}: ${match.odds[k]}</div>`;
             });
 
+            let predictionHtml = '';
+            if (aiPredictions[match.id]) {
+                const pred = aiPredictions[match.id];
+                predictionHtml = `
+                    <div class="ai-advice-bubble" style="margin-top: 1rem; padding: 0.8rem; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; border-radius: 4px; font-size: 0.85rem;">
+                        <div style="font-weight: bold; color: #a78bfa; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+                            🧠 Conseil IA : ${pred.bet} 
+                            <span class="badge" style="background: #8b5cf6; font-size: 0.7rem;">${pred.confidence}%</span>
+                        </div>
+                        <div style="opacity: 0.8; font-style: italic;">"${pred.reason}"</div>
+                    </div>
+                `;
+            }
+
             div.innerHTML = `
                 <div class="match-header">
                     <span>${match.sport} • ${match.competition}</span>
@@ -277,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
                 <div class="match-odds">${oddsHtml}</div>
+                ${predictionHtml}
             `;
             matchesList.appendChild(div);
         });
@@ -340,6 +364,11 @@ document.addEventListener('DOMContentLoaded', () => {
             addChatBubble("🧠 Expert", data.expert);
             addChatBubble("👿 Avocat", data.pessimist);
             addChatBubble("📈 Réseauteur", data.trend);
+
+            if (data.predictions) {
+                aiPredictions = data.predictions;
+                renderMatches(currentMatches); // Update match items with advice
+            }
 
             if (data.tickets) renderTripleTickets(data.tickets);
             runBtn.innerText = '✅ Analyses Complétées';

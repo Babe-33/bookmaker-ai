@@ -227,6 +227,22 @@
                         <div class="stat-item"><span class="label">Profit Net</span><span class="val" id="stat-net-profit">0€</span></div>
                     </div>
 
+                    <!-- Strategy ROI Breakdown -->
+                    <div id="strategy-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; margin-bottom: 2rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; font-size: 0.85rem;">
+                        <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.1);">
+                            <div style="color: #10b981; font-weight: bold; margin-bottom: 2px;">🛡️ Safe</div>
+                            <div id="stat-safe-roi">ROI: 0%</div>
+                        </div>
+                        <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.1);">
+                            <div style="color: #3b82f6; font-weight: bold; margin-bottom: 2px;">📊 Balanced</div>
+                            <div id="stat-balanced-roi">ROI: 0%</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="color: #f59e0b; font-weight: bold; margin-bottom: 2px;">🔥 Risky</div>
+                            <div id="stat-risky-roi">ROI: 0%</div>
+                        </div>
+                    </div>
+
                     <div id="history-list" class="history-list" style="display: flex; flex-direction: column; gap: 0.8rem;">
                         <div style="text-align: center; color: #94a3b8; padding: 2rem;">Aucun pari enregistré.</div>
                     </div>

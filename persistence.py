@@ -88,15 +88,23 @@ def record_bet(ticket_type, selections, total_odds, stake):
     """Records a new bet in the history and deducts the stake from bankroll."""
     db = load_db()
     
+    # Ensure bankroll exists
+    if "bankroll" not in db:
+        db["bankroll"] = {"balance": 100.0, "initial_balance": 100.0, "currency": "€"}
+    
+    balance = db["bankroll"].get("balance", 0)
+    
     # Check if we have enough balance
-    if db["bankroll"]["balance"] < stake:
+    if balance < stake:
         return None, "Solde insuffisant."
     
     # Determine primary sport and ID
     bet_id = f"bet_{int(time.time())}"
     primary_sport = "Autre"
     if selections and len(selections) > 0:
-        primary_sport = selections[0].get("sport", selections[0].get("match_name", "Autre").split(" vs ")[0])
+        first_sel = selections[0]
+        if isinstance(first_sel, dict):
+            primary_sport = first_sel.get("sport", first_sel.get("match_name", "Autre").split(" vs ")[0])
 
     new_bet = {
         "id": bet_id,
@@ -110,8 +118,9 @@ def record_bet(ticket_type, selections, total_odds, stake):
         "primary_sport": primary_sport
     }
     
+    if "history" not in db: db["history"] = []
     db["history"].append(new_bet)
-    db["bankroll"]["balance"] = round(db["bankroll"]["balance"] - stake, 2)
+    db["bankroll"]["balance"] = round(balance - stake, 2)
     save_db(db)
     return bet_id, None
 
@@ -188,9 +197,10 @@ def get_bankroll_stats():
             
         # Sport Breakdown
         sport = "Autre"
-        if bet.get("selections") and len(bet["selections"]) > 0:
-            # We take the sport of the first selection as primary sport for themed tickets
-            sport = bet["selections"][0].get("sport", "Autre")
+        if bet.get("selections") and isinstance(bet["selections"], list) and len(bet["selections"]) > 0:
+            first_sel = bet["selections"][0]
+            if isinstance(first_sel, dict):
+                sport = first_sel.get("sport", "Autre")
         
         if sport not in stats["by_sport"]:
             stats["by_sport"][sport] = {"staked": 0, "profit": 0, "bets": 0}

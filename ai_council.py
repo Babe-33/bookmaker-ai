@@ -15,8 +15,8 @@ load_dotenv()
 # Global Concurrency Semaphore
 GEMINI_SEMAPHORE = asyncio.Semaphore(1)
 
-# STABLE MODEL CHOICE
-DEFAULT_MODEL = "gemini-1.5-flash"
+# DEFINITIVE MODEL CHOICE (Confirmed in user screenshot)
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 async def call_persona_with_retry(client, system_prompt, match_data, use_search=False, max_retries=2):
     """Robust Gemini call with timeout and RPS protection."""
@@ -173,7 +173,8 @@ def extract_json(text):
 
 async def fetch_live_web_data(force_refresh=False):
     """Hybrid Scraper: ESPN API + niche fallback."""
-    cached = get_cache("match_cache_v3", ttl=21600)
+    # New cache key to bypass old errors
+    cached = get_cache("match_cache_v5", ttl=21600)
     if not force_refresh and cached: return cached
 
     matches = []
@@ -186,12 +187,14 @@ async def fetch_live_web_data(force_refresh=False):
     if key:
         try:
             client = genai.Client(api_key=key)
-            res = await call_persona_with_retry(client, get_niche_sports_extractor_prompt(), "Extraire matchs réels", use_search=True)
+            # Use search ONLY for scraping, not for analysis
+            res = await call_persona_with_retry(client, get_niche_sports_extractor_prompt(), "Agenda sportif aujourd'hui Pro D2 LNH Magnus", use_search=True)
             n_data = extract_json(res)
-            if n_data and "matches" in n_data: matches.extend(n_data["matches"])
+            if n_data and "matches" in n_data: 
+                matches.extend(n_data["matches"])
         except: pass
         
-    if matches: set_cache("match_cache_v3", matches)
+    if matches: set_cache("match_cache_v5", matches)
     return matches
 
 # Legacy alias
@@ -280,7 +283,7 @@ async def run_full_analysis(matches, force_refresh=False):
     if not key: return {"error": "API Key missing in environment"}
     
     m_hash = get_matches_hash(matches)
-    cache_key = f"full_analysis_v4_{m_hash}"
+    cache_key = f"full_analysis_v6_{m_hash}"
     
     cached_data = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached_data: return cached_data
@@ -288,7 +291,8 @@ async def run_full_analysis(matches, force_refresh=False):
     client = genai.Client(api_key=key)
     prompt_data = build_prompt_data(matches[:15]) 
     
-    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data)
+    # SEARCH DISABLED HERE -> NO MORE HANGING
+    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=False)
     
     if raw_res == "EXHAUSTED":
         return {"error": "QUOTA_EXHAUSTED"}

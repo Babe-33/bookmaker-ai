@@ -36,7 +36,7 @@ Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
             "competition": "Nom de la compétition",
             "homeTeam": "Equipe Domicile",
             "awayTeam": "Equipe Extérieur",
-            "date": "Date réelle du match",
+            "date": "2026-03-12T20:45:00", # Format ISO 8601 OBLIGATOIRE
             "odds": {{"1": 1.50, "N": 4.00, "2": 6.50}},
             "specialMarket": "ex: Buteur X",
             "specialOdd": 2.10
@@ -94,7 +94,7 @@ Tu DOIS retourner un objet JSON VALIDE avec la structure suivante :
             "competition": "Pro D2",
             "homeTeam": "Brive",
             "awayTeam": "Béziers",
-            "date": "Date réelle du match",
+            "date": "2026-03-12T21:00:00", # Format ISO 8601 OBLIGATOIRE
         }}
     ]
 }}

@@ -15,6 +15,29 @@ load_dotenv()
 # Global Concurrency Semaphore: Only 1 Gemini call at a time to stay under RPS limits
 GEMINI_SEMAPHORE = asyncio.Semaphore(1)
 
+# Persistent Model Choice (Auto-detected on first fail)
+_DETECTED_MODEL = "gemini-2.0-flash" 
+
+async def get_best_model(client):
+    """Dynamically picks the best available model from the environment."""
+    global _DETECTED_MODEL
+    try:
+        ms = await asyncio.to_thread(client.models.list)
+        names = [m.name.replace("models/", "") for m in ms]
+        # Priority list
+        for candidate in ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash", "gemini-1.5-flash-lite"]:
+            if candidate in names:
+                _DETECTED_MODEL = candidate
+                return candidate
+        # Fallback to anything with flash
+        for name in names:
+            if "flash" in name:
+                _DETECTED_MODEL = name
+                return name
+        return _DETECTED_MODEL # Stay with default
+    except:
+        return _DETECTED_MODEL
+
 def get_base_extractor_prompt():
     today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
     return f"""
@@ -169,11 +192,12 @@ async def fetch_live_web_data(force_refresh=False):
         client = genai.Client(api_key=key)
         sys_prompt = get_niche_sports_extractor_prompt()
         try:
+            model_name = await get_best_model(client)
             # Use Semaphore to avoid RPS saturation
             async with GEMINI_SEMAPHORE:
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-2.0-flash", # Use available 2.0-flash version
+                    model=model_name,
                     contents="Trouve l'agenda sportif d'AUJOURD'HUI pour la Pro D2 (Rugby), la Starligue (Handball), la Ligue Magnus (Hockey) et le Tennis ATP/WTA. Donne les VRAIES cotes bookmakers. N'INVENTE RIEN.",
                     config=types.GenerateContentConfig(
                         system_instruction=sys_prompt,
@@ -234,10 +258,11 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                 config_kwargs["tools"] = [{"google_search": {}}]
 
             try:
-                # Use standard gemini-1.5-flash
+                model_name = await get_best_model(client)
+                # Use standard detected model
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-2.0-flash", # Use stable version
+                    model=model_name,
                     contents=match_data,
                     config=types.GenerateContentConfig(**config_kwargs)
                 )

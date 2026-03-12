@@ -283,12 +283,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aiPredictions[match.id]) {
                 const pred = aiPredictions[match.id];
                 predictionHtml = `
-                    <div class="ai-advice-bubble" style="margin-top: 1rem; padding: 0.8rem; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; border-radius: 4px; font-size: 0.85rem;">
-                        <div style="font-weight: bold; color: #a78bfa; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+                    <div class="ai-advice-bubble" style="margin-top: 0.8rem; padding: 0.8rem; background: rgba(139, 92, 246, 0.1); border-left: 4px solid #8b5cf6; border-radius: 8px;">
+                        <div class="advice-header" style="font-weight: 800; color: #a78bfa; font-size: 0.75rem; margin-bottom: 0.3rem; text-transform: uppercase;">
                             🧠 Conseil IA : ${pred.bet} 
-                            <span class="badge" style="background: #8b5cf6; font-size: 0.7rem;">${pred.confidence}%</span>
+                            <span class="badge" style="background: #8b5cf6; padding: 2px 5px; border-radius: 4px; color: white; margin-left: 5px;">${pred.confidence}%</span>
                         </div>
-                        <div style="opacity: 0.8; font-style: italic;">"${pred.reason}"</div>
+                        <div class="advice-reason" style="font-style: italic; color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">
+                            "${pred.reason}"
+                        </div>
                     </div>
                 `;
             }
@@ -298,8 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span>${match.sport} • ${match.competition}</span>
                     <span>${formatDate(match.date)}</span>
                 </div>
-                <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
-                <div class="match-odds">${oddsHtml}</div>
+                <div class="match-teams" style="margin-bottom: 0.5rem;">${match.homeTeam} vs ${match.awayTeam}</div>
+                <div class="match-odds" style="margin-bottom: 0.5rem;">${oddsHtml}</div>
                 ${predictionHtml}
             `;
             matchesList.appendChild(div);

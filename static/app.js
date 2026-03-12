@@ -236,24 +236,41 @@ document.addEventListener('DOMContentLoaded', () => {
             let actionHtml = '';
             if (bet.status === 'PENDING') {
                 actionHtml = `
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn cta btn-result" onclick="settleBet('${bet.id}', 'WON')" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;">Gagné</button>
-                        <button class="btn primary btn-result" onclick="settleBet('${bet.id}', 'LOST')" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; background: #ef4444;">Perdu</button>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button class="btn cta btn-result" onclick="event.stopPropagation(); settleBet('${bet.id}', 'WON')" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;">Gagné</button>
+                        <button class="btn primary btn-result" onclick="event.stopPropagation(); settleBet('${bet.id}', 'LOST')" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; background: #ef4444;">Perdu</button>
                     </div>
                 `;
             }
 
+            const selectionsHtml = (bet.selections || []).map(sel => `
+                <div style="padding: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem;">
+                    <div style="font-weight: bold; color: #e2e8f0;">${sel.match || sel.match_name}</div>
+                    <div style="display: flex; justify-content: space-between; opacity: 0.8;">
+                        <span>Pari: ${sel.bet || sel.prediction}</span>
+                        <span>@ ${sel.odds?.toFixed(2) || '1.00'}</span>
+                    </div>
+                </div>
+            `).join('');
+
             return `
-                <div class="history-item">
-                    <div class="history-main">
-                        <span class="history-date">${date}</span>
-                        <span class="history-type" style="color: ${bet.type === 'safe' ? '#10b981' : bet.type === 'balanced' ? '#3b82f6' : '#f59e0b'}">${bet.type.toUpperCase()} (${bet.total_odds.toFixed(2)})</span>
-                        <span style="font-size: 0.8rem; opacity: 0.7;">${bet.selections.length} sélections • Stake: ${bet.stake.toFixed(2)}€</span>
+                <div class="history-item" onclick="this.classList.toggle('expanded')" style="cursor: pointer; display: block; padding-bottom: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+                        <div class="history-main">
+                            <span class="history-date">${date}</span>
+                            <span class="history-type" style="color: ${bet.type === 'safe' ? '#10b981' : bet.type === 'balanced' ? '#3b82f6' : '#f59e0b'}">${bet.type.toUpperCase()} (${bet.total_odds.toFixed(2)})</span>
+                            <span style="font-size: 0.8rem; opacity: 0.7; display: block;">${bet.selections.length} sélections • Stake: ${bet.stake.toFixed(2)}€</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem;">
+                            <span class="history-profit ${sClass}">${bet.status === 'WON' ? '+' + bet.potential_gain.toFixed(2) + '€' : bet.status === 'LOST' ? '-' + bet.stake.toFixed(2) + '€' : bet.status}</span>
+                            ${actionHtml}
+                        </div>
                     </div>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
-                        <span class="history-profit ${sClass}">${bet.status === 'WON' ? '+' + bet.potential_gain.toFixed(2) : bet.status === 'LOST' ? '-' + bet.stake.toFixed(2) : bet.status}</span>
-                        ${actionHtml}
+                    <div class="history-details" style="display: none; margin-top: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
+                        <div style="padding: 0.5rem; background: rgba(255,255,255,0.05); font-size: 0.7rem; font-weight: bold; text-transform: uppercase; color: #94a3b8;">Détails de la Sélection</div>
+                        ${selectionsHtml}
                     </div>
+                    <div class="expand-hint" style="text-align: center; font-size: 0.6rem; opacity: 0.3; margin-top: 0.4rem;">Cliquez pour voir les matchs ⌄</div>
                 </div>
             `;
         }).join('');

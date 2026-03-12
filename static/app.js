@@ -390,20 +390,31 @@ document.addEventListener('DOMContentLoaded', () => {
     runBtn.addEventListener('click', async () => {
         runBtn.disabled = true;
         runBtn.innerText = '🧠 Analyse en cours...';
+        
+        // Clear previous and show loading for each expert
+        statResponse.innerHTML = '<span class="loading-mini">⏳ Le Statisticien analyse...</span>';
+        expertResponse.innerHTML = '<span class="loading-mini">⏳ L\'Expert Terrain analyse...</span>';
+        pessimistResponse.innerHTML = '<span class="loading-mini">⏳ L\'Avocat du Diable analyse...</span>';
+        trendResponse.innerHTML = '<span class="loading-mini">⏳ Le Réseauteur analyse...</span>';
         chatDialogue.innerHTML = '';
+        
         try {
             const response = await fetch('/api/council/full');
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            
+            if (data.error) {
+                const errMsg = data.error.includes("QUOTA") ? "Quota Gemini épuisé. Réessayez demain." : data.error;
+                throw new Error(errMsg);
+            }
 
-            statResponse.innerHTML = formatMarkdown(data.statistician);
-            expertResponse.innerHTML = formatMarkdown(data.expert);
-            pessimistResponse.innerHTML = formatMarkdown(data.pessimist);
-            trendResponse.innerHTML = formatMarkdown(data.trend);
+            statResponse.innerHTML = formatMarkdown(data.statistician || "Non disponible.");
+            expertResponse.innerHTML = formatMarkdown(data.expert || "Non disponible.");
+            pessimistResponse.innerHTML = formatMarkdown(data.pessimist || "Non disponible.");
+            trendResponse.innerHTML = formatMarkdown(data.trend || "Non disponible.");
 
             if (data.predictions) {
                 aiPredictions = data.predictions;
-                renderMatches(currentMatches); // Update match items with advice
+                renderMatches(currentMatches);
             }
 
             if (data.tickets) renderTripleTickets(data.tickets);
@@ -412,7 +423,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             runBtn.innerText = '🔄 Réessayer';
             runBtn.disabled = false;
-            bookieDebate.innerHTML = `<div style="color: #ef4444;">❌ Erreur: ${error.message}</div>`;
+            const errHtml = `<div style="color: #ef4444; padding: 1rem; border: 1px solid #ef4444; border-radius: 8px; background: rgba(239, 68, 68, 0.1);">❌ Erreur: ${error.message}</div>`;
+            statResponse.innerHTML = errHtml;
+            expertResponse.innerHTML = errHtml;
+            pessimistResponse.innerHTML = errHtml;
+            trendResponse.innerHTML = errHtml;
+            bookieDebate.innerHTML = errHtml;
         }
     });
 

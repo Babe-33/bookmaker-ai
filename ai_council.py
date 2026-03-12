@@ -173,8 +173,8 @@ async def fetch_live_web_data(force_refresh=False):
             async with GEMINI_SEMAPHORE:
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-flash-latest",
-                    contents="Cherche EXACTEMENT l'agenda sportif d'aujourd'hui et demain pour la Pro D2, la Starligue, la Ligue Magnus, la Champions Cup (Rugby), les Jeux Olympiques, le Tour de France (Cyclisme), the Formule 1 (Grand Prix), et le Tennis (Tournois ATP/WTA). N'INVENTE AUCUN MATCH. Extrais le JSON avec de vraies cotes bookmakers. Pour la F1, mets le favori en 'homeTeam' et 'Le reste du peloton' en 'awayTeam'.",
+                    model="gemini-1.5-flash", # Use specific model version
+                    contents="Trouve l'agenda sportif d'AUJOURD'HUI pour la Pro D2 (Rugby), la Starligue (Handball), la Ligue Magnus (Hockey) et le Tennis ATP/WTA. Donne les VRAIES cotes bookmakers. N'INVENTE RIEN.",
                     config=types.GenerateContentConfig(
                         system_instruction=sys_prompt,
                         temperature=0.0,
@@ -234,10 +234,10 @@ async def call_persona_with_retry(client, system_prompt, match_data, use_search=
                 config_kwargs["tools"] = [{"google_search": {}}]
 
             try:
-                # Use standard gemini-1.5-flash (no latest)
+                # Use standard gemini-1.5-flash
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-flash-latest",
+                    model="gemini-1.5-flash", # Use stable version
                     contents=match_data,
                     config=types.GenerateContentConfig(**config_kwargs)
                 )
@@ -361,10 +361,11 @@ async def run_full_analysis(matches, force_refresh=False):
         return cached_data
 
     client = genai.Client(api_key=key)
-    prompt_data = build_prompt_data(matches[:12]) 
+    # LIMIT MATCHES TO 20 TO AVOID OVERWHELMING AI AND DELAY
+    prompt_data = build_prompt_data(matches[:20]) 
     
-    print(f"DEBUG: Using API Key starting with {key[:8]}...")    
-    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=True)
+    # REMOVED GOOGLE SEARCH FROM MASTER COUNCIL TO SPEED UP (Already scraped)
+    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=False)
     
     if raw_res == "EXHAUSTED":
         return {"error": "QUOTA_EXHAUSTED"}

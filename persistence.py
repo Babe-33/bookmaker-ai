@@ -128,63 +128,24 @@ def record_bet(ticket_type, selections, total_odds, stake):
         print(f"ERROR record_bet: {e}")
         return None, f"Erreur serveur: {str(e)}"
 
-def update_bet_result(bet_id, result):
-    """Updates the status of a bet and adjusts the bankroll if won."""
-    db = load_db()
-    bet = next((b for b in db["history"] if b["id"] == bet_id), None)
-    
-    if not bet:
-        return False, "Pari introuvable."
-    
-    if bet["status"] != "PENDING":
-        return False, f"Le pari est déjà marqué comme {bet['status']}."
-    
-    bet["status"] = result
-    
-    if result == "WON":
-        db["bankroll"]["balance"] = round(db["bankroll"]["balance"] + bet["potential_gain"], 2)
-    elif result == "VOID":
-        db["bankroll"]["balance"] = round(db["bankroll"]["balance"] + bet["stake"], 2)
-        
-    save_db(db)
-    return True, None
 
 def get_bankroll_stats():
-    """Calculates ROI, win rate, and other betting stats with deep breakdown."""
-    db = load_db()
-    history = db.get("history", [])
-    
-    total_bets = len(history)
-    settled_bets = [b for b in history if b.get("status") in ["WON", "LOST"]]
-    
-    # Initialize basic stats
-    stats = {
-        "total_bets": total_bets,
-        "win_rate": 0,
-        "total_staked": 0,
-        "total_returned": 0,
-        "roi": 0,
-        "net_profit": 0,
-        "balance": db.get("bankroll", {}).get("balance", 0),
-        "by_strategy": {
-            "safe": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0},
-            "balanced": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0},
-            "risky": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0}
-        },
-        "by_sport": {}
-    }
-    """Calculates advanced ROI and breakdown statistics with extreme safety."""
+    """Calculates summary statistics with extreme safety and standardization."""
     try:
         db = load_db()
         bankroll = db.get("bankroll", {"balance": 100.0, "initial_balance": 100.0})
         history = db.get("history", [])
         
+        # Standardized stats object matching app.js expectations
         stats = {
-            "current_balance": bankroll.get("balance", 100.0),
+            "balance": round(bankroll.get("balance", 100.0), 2),
+            "current_balance": round(bankroll.get("balance", 100.0), 2),
             "net_profit": round(bankroll.get("balance", 100.0) - bankroll.get("initial_balance", 100.0), 2),
             "win_rate": 0,
             "roi": 0,
             "total_bets": len(history),
+            "total_staked": 0,
+            "total_returned": 0,
             "by_strategy": {
                 "safe": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0},
                 "balanced": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0},
@@ -193,10 +154,7 @@ def get_bankroll_stats():
             "by_sport": {}
         }
         
-        total_staked = 0
-        total_returned = 0
         wins = 0
-        
         settled_bets = [b for b in history if isinstance(b, dict) and b.get("status") in ["WON", "LOST"]]
         
         for bet in settled_bets:
@@ -205,8 +163,8 @@ def get_bankroll_stats():
             gain = bet.get("potential_gain", 0) if status == "WON" else 0
             profit = gain - stake
             
-            total_staked += stake
-            total_returned += gain
+            stats["total_staked"] += stake
+            stats["total_returned"] += gain
             if status == "WON": wins += 1
             
             # Strategy Breakdown
@@ -236,9 +194,9 @@ def get_bankroll_stats():
             stats["by_sport"][sport]["profit"] += profit
             stats["by_sport"][sport]["bets"] += 1
 
-        # Post-process percentages
-        if total_staked > 0:
-            stats["roi"] = round(((total_returned - total_staked) / total_staked) * 100, 1)
+        # Post-process calculations
+        if stats["total_staked"] > 0:
+            stats["roi"] = round(((stats["total_returned"] - stats["total_staked"]) / stats["total_staked"]) * 100, 1)
         
         if len(settled_bets) > 0:
             stats["win_rate"] = round((wins / len(settled_bets)) * 100, 1)
@@ -247,18 +205,22 @@ def get_bankroll_stats():
             if s["bets"] > 0:
                 s["win_rate"] = round((s["win_rate"] / s["bets"]) * 100, 1)
                 s["profit"] = round(s["profit"], 2)
-                s["staked"] = round(s["staked"], 2)
             
         for s in stats["by_sport"].values():
             s["profit"] = round(s["profit"], 2)
-            s["staked"] = round(s["staked"], 2)
+                
         return stats
     except Exception as e:
-        print(f"ERROR get_bankroll_stats: {e}")
-        return {"current_balance": 100.0, "net_profit": 0, "win_rate": 0, "roi": 0, "total_bets": 0, "by_strategy": {}, "by_sport": {}}
+        print(f"CRITICAL get_bankroll_stats error: {e}")
+        # Return mandatory defaults to prevent frontend toFixed crashes
+        return {
+            "balance": 100.0, "current_balance": 100.0, "net_profit": 0.0, 
+            "win_rate": 0, "roi": 0, "total_bets": 0, "total_staked": 0.0,
+            "total_returned": 0.0, "by_strategy": {}, "by_sport": {}
+        }
 
 def update_bet_result(bet_id, result):
-    """Updates the status of a bet with extreme robustness."""
+    """Updates the status of a bet with extreme robustness and handles payouts."""
     try:
         db = load_db()
         history = db.get("history", [])
@@ -270,10 +232,16 @@ def update_bet_result(bet_id, result):
                     return False, "Pari déjà réglé."
                     
                 bet["status"] = result
+                if "bankroll" not in db: db["bankroll"] = {"balance": 100.0, "initial_balance": 100.0}
+                
                 if result == "WON":
                     gain = bet.get("potential_gain", 0)
-                    if "bankroll" not in db: db["bankroll"] = {"balance": 100.0}
                     db["bankroll"]["balance"] = round(db["bankroll"].get("balance", 0) + gain, 2)
+                elif result == "VOID":
+                    # Refund the stake
+                    stake = bet.get("stake", 0)
+                    db["bankroll"]["balance"] = round(db["bankroll"].get("balance", 0) + stake, 2)
+                
                 found = True
                 break
         

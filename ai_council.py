@@ -379,7 +379,11 @@ async def run_full_analysis(matches, force_refresh=False):
             "expert": "Erreur formatage Master Council.",
             "pessimist": "Erreur formatage Master Council.",
             "trend": "Erreur formatage Master Council.",
-            "ticket": {"debate": "Analyse échouée (Format JSON invalide).", "main_ticket": {"total_odds": 0, "selections": []}}
+            "tickets": {
+                "safe": {"total_odds": 0, "suggested_stake": 0, "selections": []},
+                "balanced": {"total_odds": 0, "suggested_stake": 0, "selections": []},
+                "risky": {"total_odds": 0, "suggested_stake": 0, "selections": []}
+            }
         }
 
 async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
@@ -395,7 +399,7 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
         "expert": data.get("expert"),
         "pessimist": data.get("pessimist"),
         "trend": data.get("trend"),
-        "ticket": data.get("ticket")
+        "tickets": data.get("tickets")
     }
 
 async def generate_daily_brief(matches):

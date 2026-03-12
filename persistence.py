@@ -23,13 +23,14 @@ def load_db():
             pass # Fallback to local file if Firebase fails
             
     if not os.path.exists(DB_PATH):
-        with open(DB_PATH, "w") as f: json.dump(default, f)
+        with open(DB_PATH, "w", encoding="utf-8") as f: 
+            json.dump(default, f, ensure_ascii=False)
         return default
-    with open(DB_PATH, "r") as f: 
-        try:
+    try:
+        with open(DB_PATH, "r", encoding="utf-8") as f: 
             return json.load(f)
-        except:
-            return default
+    except:
+        return default
 
 def save_db(data):
     firebase_url = os.getenv("FIREBASE_URL")
@@ -41,7 +42,11 @@ def save_db(data):
             print(f"Firebase save error: {e}. Saving to local DB.")
             pass
             
-    with open(DB_PATH, "w") as f: json.dump(data, f, indent=4)
+    try:
+        with open(DB_PATH, "w", encoding="utf-8") as f: 
+            json.dump(data, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Local save error: {e}")
 
 def get_cache(key, ttl=3600):
     """
@@ -87,16 +92,21 @@ def record_bet(ticket_type, selections, total_odds, stake):
     if db["bankroll"]["balance"] < stake:
         return None, "Solde insuffisant."
     
-    bet_id = f"bet_{int(time.time())}"
+    # Determine primary sport
+    primary_sport = "Autre"
+    if selections and len(selections) > 0:
+        primary_sport = selections[0].get("sport", selections[0].get("match_name", "Autre").split(" vs ")[0])
+
     new_bet = {
         "id": bet_id,
         "timestamp": time.time(),
-        "type": ticket_type, # safe, balanced, risky
+        "type": ticket_type,
         "selections": selections,
         "total_odds": total_odds,
         "stake": stake,
         "potential_gain": round(stake * total_odds, 2),
-        "status": "PENDING" # PENDING, WON, LOST, VOID
+        "status": "PENDING",
+        "primary_sport": primary_sport
     }
     
     db["history"].append(new_bet)
@@ -126,39 +136,83 @@ def update_bet_result(bet_id, result):
     return True, None
 
 def get_bankroll_stats():
-    """Calculates ROI, win rate, and other betting stats."""
+    """Calculates ROI, win rate, and other betting stats with deep breakdown."""
     db = load_db()
     history = db.get("history", [])
     
     total_bets = len(history)
-    settled_bets = [b for b in history if b["status"] in ["WON", "LOST"]]
+    settled_bets = [b for b in history if b.get("status") in ["WON", "LOST"]]
+    
+    # Initialize basic stats
+    stats = {
+        "total_bets": total_bets,
+        "win_rate": 0,
+        "total_staked": 0,
+        "total_returned": 0,
+        "roi": 0,
+        "net_profit": 0,
+        "balance": db.get("bankroll", {}).get("balance", 0),
+        "by_strategy": {
+            "safe": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0},
+            "balanced": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0},
+            "risky": {"staked": 0, "profit": 0, "win_rate": 0, "bets": 0}
+        },
+        "by_sport": {}
+    }
     
     if not settled_bets:
-        return {
-            "total_bets": total_bets,
-            "win_rate": 0,
-            "total_staked": 0,
-            "total_returned": 0,
-            "roi": 0,
-            "net_profit": 0,
-            "balance": db["bankroll"]["balance"]
-        }
+        return stats
     
-    wins = len([b for b in settled_bets if b["status"] == "WON"])
-    win_rate = (wins / len(settled_bets)) * 100
+    total_staked = 0
+    total_returned = 0
+    wins = 0
     
-    total_staked = sum(b["stake"] for b in settled_bets)
-    total_returned = sum(b.get("potential_gain", 0) for b in settled_bets if b["status"] == "WON")
+    for bet in settled_bets:
+        stake = bet.get("stake", 0)
+        gain = bet.get("potential_gain", 0) if bet["status"] == "WON" else 0
+        profit = gain - stake
+        
+        total_staked += stake
+        total_returned += gain
+        if bet["status"] == "WON": wins += 1
+        
+        # Strategy Breakdown
+        strat = bet.get("type", "safe")
+        if strat in stats["by_strategy"]:
+            s_data = stats["by_strategy"][strat]
+            s_data["staked"] += stake
+            s_data["profit"] += profit
+            s_data["bets"] += 1
+            if bet["status"] == "WON": s_data["win_rate"] += 1 # Temporary count
+            
+        # Sport Breakdown
+        sport = "Autre"
+        if bet.get("selections") and len(bet["selections"]) > 0:
+            # We take the sport of the first selection as primary sport for themed tickets
+            sport = bet["selections"][0].get("sport", "Autre")
+        
+        if sport not in stats["by_sport"]:
+            stats["by_sport"][sport] = {"staked": 0, "profit": 0, "bets": 0}
+        
+        stats["by_sport"][sport]["staked"] += stake
+        stats["by_sport"][sport]["profit"] += profit
+        stats["by_sport"][sport]["bets"] += 1
+        
+    # Finalize percentages
+    stats["win_rate"] = round((wins / len(settled_bets)) * 100, 1)
+    stats["total_staked"] = round(total_staked, 2)
+    stats["total_returned"] = round(total_returned, 2)
+    stats["net_profit"] = round(total_returned - total_staked, 2)
+    stats["roi"] = round((stats["net_profit"] / total_staked) * 100, 1) if total_staked > 0 else 0
     
-    net_profit = total_returned - total_staked
-    roi = (net_profit / total_staked) * 100 if total_staked > 0 else 0
-    
-    return {
-        "total_bets": total_bets,
-        "win_rate": round(win_rate, 1),
-        "total_staked": round(total_staked, 2),
-        "total_returned": round(total_returned, 2),
-        "roi": round(roi, 1),
-        "net_profit": round(net_profit, 2),
-        "balance": db["bankroll"]["balance"]
-    }
+    for s in stats["by_strategy"].values():
+        if s["bets"] > 0:
+            s["win_rate"] = round((s["win_rate"] / s["bets"]) * 100, 1)
+            s["profit"] = round(s["profit"], 2)
+            s["staked"] = round(s["staked"], 2)
+            
+    for s in stats["by_sport"].values():
+        s["profit"] = round(s["profit"], 2)
+        s["staked"] = round(s["staked"], 2)
+
+    return stats

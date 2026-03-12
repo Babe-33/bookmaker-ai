@@ -285,18 +285,18 @@ def build_prompt_data(matches):
     return prompt_data
 
 # Personas Instructions - DEEP ANALYSIS
-# MASTER SYSTEM PROMPT - Consolidates all experts into one call
 SYSTEM_MASTER_COUNCIL = """Tu es une API de pronostics sportifs de niveau mondial. Tu DOIS retourner UN SEUL OBJET JSON pur.
 Interdiction de mettre des blocs de code markdown (```json).
 
 Missions :
 1. Analyse les matchs fournis sous tous les angles (stats, terrain, risques, tendances).
-2. Propose 3 TICKETS DISTINCTS :
-   - 'safe_ticket' : Cote totale entre 1.50 et 2.20. Très haute probabilité.
-   - 'balanced_ticket' : Cote totale entre 3.00 et 6.00. Bon rapport risque/gain.
-   - 'risky_ticket' : Cote totale 10.00+. Pour chercher le gros gain.
+2. Propose 3 TICKETS DISTINCTS qui sont la SYNTHÈSE de tes meilleures prévisions individuelles :
+   - 'safe_ticket' : Le top du top de la sécurité. Cote 1.50-2.20.
+   - 'balanced_ticket' : La meilleure valeur rentabilité. Cote 3.00-6.00.
+   - 'risky_ticket' : Ton meilleur coup de poker. Cote 10.00+.
 3. DIVERSIFIE les paris : Ne reste pas sur le 1N2. Utilise des Handicaps, "But d'un joueur", "Double Chance + Buts", "Mi-temps", etc.
-4. MISE (Stake) : Pour chaque ticket, propose une mise de 0.00€ à 5.00€ max (5€ = confiance aveugle, 1€ = faible confiance).
+4. MISE (Stake) : Pour chaque ticket, propose une mise de 0.00€ à 5.00€ max.
+5. PRÉDICTIONS INDIVIDUELLES : Pour TOUS les matchs de la liste, donne ton pronostic préféré (ex: "Victoire A", "Over 1.5", "Buteur X") avec une confiance de 0 à 100%.
 
 Structure JSON attendue :
 {
@@ -304,6 +304,9 @@ Structure JSON attendue :
     "expert": "Analyse Terrain (très court)...",
     "pessimist": "Pièges détectés (très court)...",
     "trend": "Tendances (très court)...",
+    "predictions": {
+        "ID_DU_MATCH": {"bet": "Pari suggéré", "confidence": 85, "reason": "Pourquoi ?"}
+    },
     "tickets": {
         "safe": {
             "total_odds": 1.75,
@@ -383,7 +386,8 @@ async def run_full_analysis(matches, force_refresh=False):
                 "safe": {"total_odds": 0, "suggested_stake": 0, "selections": []},
                 "balanced": {"total_odds": 0, "suggested_stake": 0, "selections": []},
                 "risky": {"total_odds": 0, "suggested_stake": 0, "selections": []}
-            }
+            },
+            "predictions": {}
         }
 
 async def run_bookmaker(matches, stat_response="", expert_response="", pessimist_response="", trend_response=""):
@@ -399,7 +403,8 @@ async def run_bookmaker(matches, stat_response="", expert_response="", pessimist
         "expert": data.get("expert"),
         "pessimist": data.get("pessimist"),
         "trend": data.get("trend"),
-        "tickets": data.get("tickets")
+        "tickets": data.get("tickets"),
+        "predictions": data.get("predictions", {})
     }
 
 async def generate_daily_brief(matches):

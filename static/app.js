@@ -300,8 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span>${match.sport} • ${match.competition}</span>
                     <span>${formatDate(match.date)}</span>
                 </div>
-                <div class="match-teams" style="margin-bottom: 0.5rem;">${match.homeTeam} vs ${match.awayTeam}</div>
-                <div class="match-odds" style="margin-bottom: 0.5rem;">${oddsHtml}</div>
+                <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
+                <div class="match-odds">${oddsHtml}</div>
                 ${predictionHtml}
             `;
             matchesList.appendChild(div);

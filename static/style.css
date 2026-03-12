@@ -251,10 +251,10 @@ header::after {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     position: relative;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.6rem;
+    min-height: 120px; /* Restore and improve min-height */
 }
 
 .match-item:hover {

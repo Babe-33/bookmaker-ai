@@ -12,31 +12,37 @@ from dotenv import load_dotenv
 load_dotenv()
 # api_key moved inside functions for better reliability with Render env vars
 
-# Global Concurrency Semaphore: Only 1 Gemini call at a time to stay under RPS limits
+# Global Concurrency Semaphore
 GEMINI_SEMAPHORE = asyncio.Semaphore(1)
 
-# Persistent Model Choice (Auto-detected on first fail)
-_DETECTED_MODEL = "gemini-2.0-flash" 
+# STABLE MODEL CHOICE
+DEFAULT_MODEL = "gemini-1.5-flash"
 
-async def get_best_model(client):
-    """Dynamically picks the best available model from the environment."""
-    global _DETECTED_MODEL
-    try:
-        ms = await asyncio.to_thread(client.models.list)
-        names = [m.name.replace("models/", "") for m in ms]
-        # Priority list
-        for candidate in ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash", "gemini-1.5-flash-lite"]:
-            if candidate in names:
-                _DETECTED_MODEL = candidate
-                return candidate
-        # Fallback to anything with flash
-        for name in names:
-            if "flash" in name:
-                _DETECTED_MODEL = name
-                return name
-        return _DETECTED_MODEL # Stay with default
-    except:
-        return _DETECTED_MODEL
+async def call_persona_with_retry(client, system_prompt, match_data, use_search=False, max_retries=2):
+    """Robust Gemini call with timeout and RPS protection."""
+    if not client: return "Pas de clé API."
+    
+    async with GEMINI_SEMAPHORE:
+        for attempt in range(max_retries):
+            try:
+                config = {"temperature": 0.2}
+                if use_search: config["tools"] = [{"google_search": {}}]
+                
+                # Use the stable model
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=DEFAULT_MODEL,
+                    contents=match_data,
+                    config=types.GenerateContentConfig(system_instruction=system_prompt, **config)
+                )
+                return response.text
+            except Exception as e:
+                err = str(e).lower()
+                if ("429" in err or "quota" in err) and attempt < max_retries - 1:
+                    await asyncio.sleep(2 * (attempt + 1))
+                    continue
+                return f"Erreur IA : {str(e)[:100]}"
+    return "Délai dépassé."
 
 def get_base_extractor_prompt():
     today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
@@ -166,131 +172,27 @@ def extract_json(text):
     return None
 
 async def fetch_live_web_data(force_refresh=False):
-    """
-    Hybrid Scraper:
-    1. Gets 100% real matches and odds from ESPN API.
-    2. Fallbacks to a HIGHLY CONSTRAINED Gemini search for niche sports.
-    3. Uses a 6-hour CLOUD cache to protect Gemini API quota.
-    """
-    # Return cache if not expired (6 hours = 21600s)
-    cached_matches = get_cache("match_cache", ttl=21600)
-    if not force_refresh and cached_matches:
-        print("Using Cloud MATCH_CACHE (6-Hour Quota Protection Active)")
-        return cached_matches
+    """Hybrid Scraper: ESPN API + niche fallback."""
+    cached = get_cache("match_cache_v3", ttl=21600)
+    if not force_refresh and cached: return cached
 
     matches = []
-    # 1. API Direct (ESPN + Merge the-odds-api)
     try:
-        espn_matches = scrape_real_matches(leagues=None, force_refresh=force_refresh)
-        matches.extend(espn_matches)
-    except Exception as e:
-        print(f"Error fetching ESPN matches: {e}")
+        matches.extend(scrape_real_matches(force_refresh=force_refresh))
+    except: pass
 
-    # 2. Scraper Niche Sport via Gemini (To cover Pro D2, LNH, Magnus...)
+    # Niche sports via Gemini
     key = os.getenv("GEMINI_API_KEY")
     if key:
-        client = genai.Client(api_key=key)
-        sys_prompt = get_niche_sports_extractor_prompt()
         try:
-            model_name = await get_best_model(client)
-            # Use Semaphore to avoid RPS saturation
-            async with GEMINI_SEMAPHORE:
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=model_name,
-                    contents="Trouve l'agenda sportif d'AUJOURD'HUI pour la Pro D2 (Rugby), la Starligue (Handball), la Ligue Magnus (Hockey) et le Tennis ATP/WTA. Donne les VRAIES cotes bookmakers. N'INVENTE RIEN.",
-                    config=types.GenerateContentConfig(
-                        system_instruction=sys_prompt,
-                        temperature=0.0,
-                        tools=[{"google_search": {}}]
-                    ),
-                )
-            
-            raw = response.text
-            if "```json" in raw:
-                raw = raw.split("```json")[1].split("```")[0]
-            elif "```" in raw:
-                raw = raw.split("```")[1].split("```")[0]
-                
-            niche_data = json.loads(raw.strip())
-            niche_matches = niche_data.get("matches", [])
-            
-            # Ensure odds object has 1, N, 2 keys explicitly
-            for nm in niche_matches:
-                if "odds" not in nm or not isinstance(nm["odds"], dict):
-                    nm["odds"] = {"1": "-", "N": "-", "2": "-"}
-                else:
-                    nm["odds"]["1"] = nm["odds"].get("1", nm["odds"].get("home", "-"))
-                    nm["odds"]["N"] = nm["odds"].get("N", nm["odds"].get("draw", "-"))
-                    nm["odds"]["2"] = nm["odds"].get("2", nm["odds"].get("away", "-"))
-
-            matches.extend(niche_matches)
-            
-        except Exception as e:
-            print(f"Error fetching niche sports via Gemini: {e}")
-            pass # No static fallback to avoid presenting fake data to the final user
-            
-    # Update Cloud Cache
-    if matches:
-        set_cache("match_cache", matches)
+            client = genai.Client(api_key=key)
+            res = await call_persona_with_retry(client, get_niche_sports_extractor_prompt(), "Extraire matchs réels", use_search=True)
+            n_data = extract_json(res)
+            if n_data and "matches" in n_data: matches.extend(n_data["matches"])
+        except: pass
         
+    if matches: set_cache("match_cache_v3", matches)
     return matches
-
-def fetch_live_in_play_data():
-    """Uses Gemini to find matches CURRENTLY playing for In-Play Live Betting."""
-    return [] # Disabled for quota safety
-
-async def call_persona_with_retry(client, system_prompt, match_data, use_search=False, max_retries=3):
-    """
-    Wraps Gemini calls with a global semaphore (RPS protection) and an auto-retry loop.
-    """
-    if not client:
-        return "Pas de clé API."
-
-    # Use Semaphore to avoid RPS saturation
-    async with GEMINI_SEMAPHORE:
-        for attempt in range(max_retries):
-            config_kwargs = {
-                "system_instruction": system_prompt,
-                "temperature": 0.2,
-            }
-            if use_search:
-                config_kwargs["tools"] = [{"google_search": {}}]
-
-            try:
-                model_name = await get_best_model(client)
-                # Use standard detected model
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=model_name,
-                    contents=match_data,
-                    config=types.GenerateContentConfig(**config_kwargs)
-                )
-                return response.text
-            except Exception as e:
-                err_msg = str(e)
-                print(f"Exception from Gemini: {e}") # DEBUG
-                if "429" in err_msg or "quota" in err_msg.lower():
-                    if attempt < max_retries - 1:
-                        # Exponential backoff: 3s, 6s...
-                        wait_time = (attempt + 1) * 3
-                        print(f"Quota Gemini dépassé. Retentative en {wait_time}s...")
-                        await asyncio.sleep(wait_time)
-                        continue
-                    else:
-                        return "EXHAUSTED"
-                
-                # If 404, try to list models to help the user
-                if "404" in err_msg:
-                    try:
-                        ms = client.models.list()
-                        m_list = ", ".join([m.name.replace("models/", "") for m in ms])
-                        return f"Erreur IA 404. Modèles dispos : {m_list}"
-                    except:
-                        return f"Erreur IA 404 : Modèle introuvable et impossible de lister les modèles."
-
-                # Return the FULL error message to help user debug
-                return f"Erreur IA : {err_msg}"
 
 # Legacy alias
 async def call_persona(*args, **kwargs):
@@ -378,19 +280,15 @@ async def run_full_analysis(matches, force_refresh=False):
     if not key: return {"error": "API Key missing in environment"}
     
     m_hash = get_matches_hash(matches)
-    cache_key = f"full_analysis_{m_hash}"
+    cache_key = f"full_analysis_v4_{m_hash}"
     
-    cached_data = get_cache(cache_key, ttl=3600) # 1 hour TTL for analysis
-    if not force_refresh and cached_data:
-        print(f"Using Cloud ANALYSIS_CACHE for {m_hash} (100% Quota Saving!)")
-        return cached_data
+    cached_data = get_cache(cache_key, ttl=3600)
+    if not force_refresh and cached_data: return cached_data
 
     client = genai.Client(api_key=key)
-    # LIMIT MATCHES TO 20 TO AVOID OVERWHELMING AI AND DELAY
-    prompt_data = build_prompt_data(matches[:20]) 
+    prompt_data = build_prompt_data(matches[:15]) 
     
-    # REMOVED GOOGLE SEARCH FROM MASTER COUNCIL TO SPEED UP (Already scraped)
-    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data, use_search=False)
+    raw_res = await call_persona_with_retry(client, SYSTEM_MASTER_COUNCIL, prompt_data)
     
     if raw_res == "EXHAUSTED":
         return {"error": "QUOTA_EXHAUSTED"}

@@ -11,42 +11,72 @@ def load_db():
     
     if firebase_url:
         try:
-            r = requests.get(f"{firebase_url}/db.json", timeout=5)
+            r = requests.get(f"{firebase_url}/db.json", timeout=10)
             if r.status_code == 200 and r.json():
                 return r.json()
-            else:
-                # Initialize Firebase with default if empty
+            elif r.status_code == 404:
+                # Initialize Firebase with default if truly missing
                 requests.put(f"{firebase_url}/db.json", json=default)
                 return default
         except Exception as e:
             print(f"Firebase connection error: {e}. Falling back to local DB.")
-            pass # Fallback to local file if Firebase fails
             
     if not os.path.exists(DB_PATH):
-        with open(DB_PATH, "w", encoding="utf-8") as f: 
-            json.dump(default, f, ensure_ascii=False)
-        return default
+        try:
+            with open(DB_PATH, "w", encoding="utf-8") as f: 
+                json.dump(default, f, ensure_ascii=False)
+            return default
+        except:
+            return default
+
+    # Robust local load
     try:
         with open(DB_PATH, "r", encoding="utf-8") as f: 
-            return json.load(f)
-    except:
+            data = json.load(f)
+            # Basic validation: must be a dict
+            if isinstance(data, dict):
+                return data
+            raise ValueError("Corrupt database structure")
+    except Exception as e:
+        print(f"CRITICAL: Failed to load database: {e}")
+        # Try to load backup if exists
+        backup_path = DB_PATH + ".bak"
+        if os.path.exists(backup_path):
+            try:
+                with open(backup_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except: pass
         return default
 
 def save_db(data):
+    """Saves database using ATOMIC write to prevent corruption."""
     firebase_url = os.getenv("FIREBASE_URL")
     if firebase_url:
         try:
-            requests.put(f"{firebase_url}/db.json", json=data, timeout=5)
-            return
+            requests.put(f"{firebase_url}/db.json", json=data, timeout=10)
         except Exception as e:
-            print(f"Firebase save error: {e}. Saving to local DB.")
-            pass
+            print(f"Firebase save error: {e}")
             
+    # Atomic Local Save: Always write to temp then rename
+    tmp_path = DB_PATH + ".tmp"
+    bak_path = DB_PATH + ".bak"
     try:
-        with open(DB_PATH, "w", encoding="utf-8") as f: 
+        # 1. Write to temporary file
+        with open(tmp_path, "w", encoding="utf-8") as f: 
             json.dump(data, f, indent=4, ensure_ascii=False)
+        
+        # 2. Create backup of current state if exists
+        if os.path.exists(DB_PATH):
+            import shutil
+            shutil.copy2(DB_PATH, bak_path)
+            
+        # 3. Rename temp to real (Atomic on most OS)
+        import os as _os
+        if _os.path.exists(tmp_path):
+            _os.replace(tmp_path, DB_PATH)
+            
     except Exception as e:
-        print(f"Local save error: {e}")
+        print(f"CRITICAL: Failed to save database locally: {e}")
 
 def get_cache(key, ttl=3600):
     """

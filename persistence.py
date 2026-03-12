@@ -92,7 +92,8 @@ def record_bet(ticket_type, selections, total_odds, stake):
     if db["bankroll"]["balance"] < stake:
         return None, "Solde insuffisant."
     
-    # Determine primary sport
+    # Determine primary sport and ID
+    bet_id = f"bet_{int(time.time())}"
     primary_sport = "Autre"
     if selections and len(selections) > 0:
         primary_sport = selections[0].get("sport", selections[0].get("match_name", "Autre").split(" vs ")[0])

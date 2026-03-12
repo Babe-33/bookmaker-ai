@@ -10,7 +10,7 @@ import requests
 from datetime import datetime
 
 from ai_council import run_ai_council, run_statistician, run_expert, run_pessimist, run_trend, run_bookmaker, fetch_live_web_data, generate_daily_brief
-from persistence import load_db, save_db
+from persistence import load_db, save_db, record_bet, update_bet_result, get_bankroll_stats
 
 # --- Models ---
 class TicketAction(BaseModel):
@@ -19,6 +19,16 @@ class TicketAction(BaseModel):
 
 class BankrollUpdate(BaseModel):
     new_balance: float
+
+class BetPlayRequest(BaseModel):
+    type: str # safe, balanced, risky
+    selections: List[dict]
+    total_odds: float
+    stake: float
+
+class BetResultRequest(BaseModel):
+    bet_id: str
+    result: str # WON, LOST, VOID
 
 app = FastAPI(title="Bookmaker AI Council API")
 
@@ -80,6 +90,24 @@ async def handle_ticket_action(data: TicketAction):
                 break
     save_db(db)
     return db
+
+@app.get("/api/bankroll/stats")
+async def get_stats():
+    return get_bankroll_stats()
+
+@app.post("/api/bet/play")
+async def play_bet(data: BetPlayRequest):
+    bet_id, error = record_bet(data.type, data.selections, data.total_odds, data.stake)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"status": "success", "bet_id": bet_id, "stats": get_bankroll_stats()}
+
+@app.post("/api/bet/result")
+async def set_bet_result(data: BetResultRequest):
+    success, error = update_bet_result(data.bet_id, data.result)
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+    return {"status": "success", "stats": get_bankroll_stats()}
 
 @app.get("/api/matches")
 async def get_matches(force_refresh: bool = False):

@@ -286,28 +286,43 @@ def build_prompt_data(matches):
 
 # Personas Instructions - DEEP ANALYSIS
 # MASTER SYSTEM PROMPT - Consolidates all experts into one call
-SYSTEM_MASTER_COUNCIL = """Tu es une API JSON pure. Tu DOIS retourner UN SEUL OBJET JSON sans aucun texte avant ou après.
+SYSTEM_MASTER_COUNCIL = """Tu es une API de pronostics sportifs de niveau mondial. Tu DOIS retourner UN SEUL OBJET JSON pur.
 Interdiction de mettre des blocs de code markdown (```json).
 
-Structure :
+Missions :
+1. Analyse les matchs fournis sous tous les angles (stats, terrain, risques, tendances).
+2. Propose 3 TICKETS DISTINCTS :
+   - 'safe_ticket' : Cote totale entre 1.50 et 2.20. Très haute probabilité.
+   - 'balanced_ticket' : Cote totale entre 3.00 et 6.00. Bon rapport risque/gain.
+   - 'risky_ticket' : Cote totale 10.00+. Pour chercher le gros gain.
+3. DIVERSIFIE les paris : Ne reste pas sur le 1N2. Utilise des Handicaps, "But d'un joueur", "Double Chance + Buts", "Mi-temps", etc.
+4. MISE (Stake) : Pour chaque ticket, propose une mise de 0.00€ à 5.00€ max (5€ = confiance aveugle, 1€ = faible confiance).
+
+Structure JSON attendue :
 {
-    "statistician": "Analyse statistique (1 phrase)...",
-    "expert": "Analyse terrain (1 phrase)...",
-    "pessimist": "Analyse des risques (1 phrase)...",
-    "trend": "Tendances (1 phrase)...",
-    "ticket": {
-        "debate": "Résumé tactique global.",
-        "main_ticket": {
-            "total_odds": 5.42,
-            "selections": [{"match_name": "Team A - Team B", "prediction": "Prediction", "odds": 1.50}]
-        },
-        "safe_ticket": {
+    "statistician": "Analyse Opta (très court)...",
+    "expert": "Analyse Terrain (très court)...",
+    "pessimist": "Pièges détectés (très court)...",
+    "trend": "Tendances (très court)...",
+    "tickets": {
+        "safe": {
             "total_odds": 1.75,
+            "suggested_stake": 5.00,
+            "selections": [{"match": "Equipe A-B", "bet": "Handicap +1 B", "odds": 1.45}]
+        },
+        "balanced": {
+            "total_odds": 4.20,
+            "suggested_stake": 2.50,
+            "selections": []
+        },
+        "risky": {
+            "total_odds": 12.50,
+            "suggested_stake": 1.00,
             "selections": []
         }
     }
 }
-Interdiction de dépasser 100 mots au total."""
+RÈGLE : SOIS ULTRA-CONCIS. PAS DE TEXTE AUTOUR."""
 
 async def run_statistician(matches):
     res = await run_full_analysis(matches)

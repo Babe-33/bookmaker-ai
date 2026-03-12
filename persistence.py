@@ -78,3 +78,87 @@ def set_cache(key, data):
             del db["caches"][k]
             
     save_db(db)
+
+def record_bet(ticket_type, selections, total_odds, stake):
+    """Records a new bet in the history and deducts the stake from bankroll."""
+    db = load_db()
+    
+    # Check if we have enough balance
+    if db["bankroll"]["balance"] < stake:
+        return None, "Solde insuffisant."
+    
+    bet_id = f"bet_{int(time.time())}"
+    new_bet = {
+        "id": bet_id,
+        "timestamp": time.time(),
+        "type": ticket_type, # safe, balanced, risky
+        "selections": selections,
+        "total_odds": total_odds,
+        "stake": stake,
+        "potential_gain": round(stake * total_odds, 2),
+        "status": "PENDING" # PENDING, WON, LOST, VOID
+    }
+    
+    db["history"].append(new_bet)
+    db["bankroll"]["balance"] = round(db["bankroll"]["balance"] - stake, 2)
+    save_db(db)
+    return bet_id, None
+
+def update_bet_result(bet_id, result):
+    """Updates the status of a bet and adjusts the bankroll if won."""
+    db = load_db()
+    bet = next((b for b in db["history"] if b["id"] == bet_id), None)
+    
+    if not bet:
+        return False, "Pari introuvable."
+    
+    if bet["status"] != "PENDING":
+        return False, f"Le pari est déjà marqué comme {bet['status']}."
+    
+    bet["status"] = result
+    
+    if result == "WON":
+        db["bankroll"]["balance"] = round(db["bankroll"]["balance"] + bet["potential_gain"], 2)
+    elif result == "VOID":
+        db["bankroll"]["balance"] = round(db["bankroll"]["balance"] + bet["stake"], 2)
+        
+    save_db(db)
+    return True, None
+
+def get_bankroll_stats():
+    """Calculates ROI, win rate, and other betting stats."""
+    db = load_db()
+    history = db.get("history", [])
+    
+    total_bets = len(history)
+    settled_bets = [b for b in history if b["status"] in ["WON", "LOST"]]
+    
+    if not settled_bets:
+        return {
+            "total_bets": total_bets,
+            "win_rate": 0,
+            "total_staked": 0,
+            "total_returned": 0,
+            "roi": 0,
+            "net_profit": 0,
+            "balance": db["bankroll"]["balance"]
+        }
+    
+    wins = len([b for b in settled_bets if b["status"] == "WON"])
+    win_rate = (wins / len(settled_bets)) * 100
+    
+    total_staked = sum(b["stake"] for b in settled_bets)
+    total_returned = sum(b.get("potential_gain", 0) for b in settled_bets if b["status"] == "WON")
+    
+    net_profit = total_returned - total_staked
+    roi = (net_profit / total_staked) * 100 if total_staked > 0 else 0
+    
+    return {
+        "total_bets": total_bets,
+        "win_rate": round(win_rate, 1),
+        "total_staked": round(total_staked, 2),
+        "total_returned": round(total_returned, 2),
+        "roi": round(roi, 1),
+        "net_profit": round(net_profit, 2),
+        "balance": db["bankroll"]["balance"]
+    }

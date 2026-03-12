@@ -296,16 +296,17 @@ Missions :
    - 'risky_ticket' : Ton meilleur coup de poker. Cote 10.00+.
 3. DIVERSIFIE les paris : Ne reste pas sur le 1N2. Utilise des Handicaps, "But d'un joueur", "Double Chance + Buts", "Mi-temps", etc.
 4. MISE (Stake) : Pour chaque ticket, propose une mise de 0.00€ à 5.00€ max.
-5. PRÉDICTIONS INDIVIDUELLES : Pour TOUS les matchs de la liste, donne ton pronostic préféré (ex: "Victoire A", "Over 1.5", "Buteur X") avec une confiance de 0 à 100%.
+5. PRÉDICTIONS INDIVIDUELLES : Pour TOUS les matchs de la liste, donne ton pronostic préféré. 
+   IMPORTANT : Utilise EXACTEMENT l'ID fourni (ex: 'espn_12345') comme clé dans l'objet 'predictions'.
 
 Structure JSON attendue :
 {
-    "statistician": "Analyse Opta (très court)...",
-    "expert": "Analyse Terrain (très court)...",
-    "pessimist": "Pièges détectés (très court)...",
-    "trend": "Tendances (très court)...",
+    "statistician": "...",
+    "expert": "...",
+    "pessimist": "...",
+    "trend": "...",
     "predictions": {
-        "ID_DU_MATCH": {"bet": "Pari suggéré", "confidence": 85, "reason": "Pourquoi ?"}
+        "espn_XXXXX": {"bet": "Victoire A", "confidence": 85, "reason": "Détail court"}
     },
     "tickets": {
         "safe": {

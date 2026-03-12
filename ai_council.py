@@ -15,34 +15,49 @@ load_dotenv()
 # Global Concurrency Semaphore
 GEMINI_SEMAPHORE = asyncio.Semaphore(1)
 
-# DEFINITIVE MODEL CHOICE (Confirmed in user screenshot)
-DEFAULT_MODEL = "gemini-2.0-flash"
+# SELF-HEALING MODEL SYSTEM
+_WORKING_MODEL = None
 
 async def call_persona_with_retry(client, system_prompt, match_data, use_search=False, max_retries=2):
-    """Robust Gemini call with timeout and RPS protection."""
+    """Robust Gemini call with dynamic model detection and auto-recovery."""
+    global _WORKING_MODEL
     if not client: return "Pas de clé API."
     
     async with GEMINI_SEMAPHORE:
-        for attempt in range(max_retries):
+        # Try current working model or defaults
+        models_to_try = [_WORKING_MODEL] if _WORKING_MODEL else ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
+        
+        for model_name in models_to_try:
+            if not model_name: continue
             try:
                 config = {"temperature": 0.2}
                 if use_search: config["tools"] = [{"google_search": {}}]
                 
-                # Use the stable model
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model=DEFAULT_MODEL,
+                    model=model_name,
                     contents=match_data,
                     config=types.GenerateContentConfig(system_instruction=system_prompt, **config)
                 )
+                _WORKING_MODEL = model_name
                 return response.text
             except Exception as e:
                 err = str(e).lower()
-                if ("429" in err or "quota" in err) and attempt < max_retries - 1:
-                    await asyncio.sleep(2 * (attempt + 1))
-                    continue
+                if "404" in err or "found" in err:
+                    continue # Try next default
                 return f"Erreur IA : {str(e)[:100]}"
-    return "Délai dépassé."
+                
+        # If all defaults fail, LIST available models and pick the first one
+        try:
+            ms = await asyncio.to_thread(client.models.list)
+            available = [m.name.replace("models/", "") for m in ms if "gemini" in m.name.lower()]
+            if available:
+                _WORKING_MODEL = available[0]
+                # Recurse once with the detected model
+                return await call_persona_with_retry(client, system_prompt, match_data, use_search, 1)
+        except: pass
+        
+    return "Aucun modèle IA disponible ou erreur de quota."
 
 def get_base_extractor_prompt():
     today = datetime.now(timezone.utc).strftime("%A %d %B %Y")
@@ -283,7 +298,7 @@ async def run_full_analysis(matches, force_refresh=False):
     if not key: return {"error": "API Key missing in environment"}
     
     m_hash = get_matches_hash(matches)
-    cache_key = f"full_analysis_v6_{m_hash}"
+    cache_key = f"full_analysis_v8_{m_hash}"
     
     cached_data = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached_data: return cached_data

@@ -183,7 +183,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadBankrollStats() {
         try {
-            const res = await fetch('/api/bankroll/stats');
+            // Cache busting to ensure we always have the real balance
+            const res = await fetch(`/api/bankroll/stats?t=${Date.now()}`);
             const stats = await res.json();
             updateStatsUI(stats);
             loadHistory();
@@ -198,8 +199,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const staked = typeof stats.total_staked === 'number' ? stats.total_staked : 0;
 
         bankrollValue.innerText = `${bal.toFixed(2)}€`;
-        roiBadge.innerText = `ROI: ${roi >= 0 ? '+' : ''}${roi}%`;
-        roiBadge.style.color = roi >= 0 ? '#10b981' : '#ef4444';
+        
+        // Update both ROI elements (Header and History)
+        const roiText = `${roi >= 0 ? '+' : ''}${roi}%`;
+        if (roiBadge) {
+            roiBadge.innerText = `ROI: ${roiText}`;
+            roiBadge.style.color = roi >= 0 ? '#10b981' : '#ef4444';
+        }
+        
+        const roiValueHeader = document.getElementById('roi-value');
+        if (roiValueHeader) {
+            roiValueHeader.innerText = roiText;
+            roiValueHeader.style.color = roi >= 0 ? '#10b981' : '#ef4444';
+        }
         
         statTotalBets.innerText = stats.total_bets || 0;
         statWinRate.innerText = `${stats.win_rate || 0}%`;

@@ -88,36 +88,47 @@ def build_match_context(matches):
     return ctx
 
 async def run_full_analysis(matches, force_refresh=False):
-    """TICKETS ONLY STRATEGY: Maximum quality, minimum payload weight."""
+    """TICKETS ONLY STRATEGY: High-Level Excellence & Direct ROI focus."""
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_tickets_only_v96_{m_hash}"
+    cache_key = f"analysis_tickets_high_level_v102_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    prompt = """Tu es une machine API HAUT NIVEAU. Renvoye un JSON valide et complet. 
-    MISSION : Oublie les pronostics individuels de tous les matchs. Concentre-toi UNIQUEMENT sur la création de 3 TÉCKETS EXCEPTIONNELS (Safe, Équilibré, Audacieux) avec les meilleurs matchs de la liste.
+    prompt = """Tu es le SYSTÈME ANALYTIQUE SUPRÊME. Ta mission est de générer du PROFIT NET. 
+    Oublie les futilités. Scanne les données pour identifier les 3 meilleures opportunités du jour.
     
-    1. "statistician" : Analyse proba détaillée sur la stratégie des 3 tickets.
-    2. "expert" : Analyse terrain de tes choix.
-    3. "pessimist" : Les points faibles de tes tickets.
-    4. "trend" : La tendance globale.
-    5. "predictions" : DOIT RESTER VIDE {}. Ne liste PAS les autres matchs.
+    1. "statistician" : Analyse mathématique froide (variance, value-bet, probabilités intrinsèques vs cotes).
+    2. "expert" : Analyse tactique et psychologique (dynamique d'équipe, motivation, enjeux cruciaux).
+    3. "pessimist" : Analyse des risques et pièges (over-confidence, blessures cachées, historique piège).
+    4. "trend" : Analyse des flux du marché et consensus des parieurs pro.
     
-    STRUCTURE EXACTE À RENVOYER :
+    RECOIS CETTE STRUCTURE JSON STRICTE ET REMPLIS-LA AVEC DU TEXTE DE HAUT NIVEAU :
     {
-      "statistician": "analyse pro poussée",
-      "expert": "analyse pro poussée",
-      "pessimist": "analyse pro poussée",
-      "trend": "analyse pro poussée",
+      "statistician": "analyse quantitative experte",
+      "expert": "analyse qualitative terrain",
+      "pessimist": "critique acerbe des points de rupture",
+      "trend": "mouvements de foule et smart money",
       "predictions": {},
       "tickets": { 
-          "safe": {"total_odds": 2.5, "selections": [{"match_id": "123", "bet": "1", "odds": 1.5, "reason": "mot"}]}, 
-          "balanced": {"total_odds": 5.0, "selections": []}, 
-          "risky": {"total_odds": 12.0, "selections": []} 
+          "safe": {
+              "total_odds": 1.5, 
+              "suggested_stake": 5.0,
+              "selections": [{"match": "Nom Match", "bet": "1", "odds": 1.5, "reason": "Argument Flash"}]
+          }, 
+          "balanced": {
+              "total_odds": 4.5, 
+              "suggested_stake": 3.0,
+              "selections": []
+          }, 
+          "risky": {
+              "total_odds": 15.0, 
+              "suggested_stake": 1.0,
+              "selections": []
+          } 
       }
     }"""
 
@@ -130,8 +141,17 @@ async def run_full_analysis(matches, force_refresh=False):
     data = extract_json(res)
     
     if data and "tickets" in data:
-        # Guarantee predictions is an empty dict so UI doesn't crash
+        # Guarantee data integrity for frontend
         if "predictions" not in data: data["predictions"] = {}
+        for strategy in ["safe", "balanced", "risky"]:
+            if strategy not in data["tickets"]: 
+                data["tickets"][strategy] = {"total_odds": 0, "suggested_stake": 0, "selections": []}
+            else:
+                ticket = data["tickets"][strategy]
+                if "suggested_stake" not in ticket: ticket["suggested_stake"] = 0
+                if "total_odds" not in ticket: ticket["total_odds"] = 0
+                if "selections" not in ticket: ticket["selections"] = []
+                
         set_cache(cache_key, data)
         return data
         

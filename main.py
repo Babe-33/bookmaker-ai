@@ -187,7 +187,6 @@ async def get_council_all():
         import traceback
         print(f"Full analysis error: {e}")
         traceback.print_exc()
-        return {"error": f"Erreur critique backend: {str(e)[:100]}"}
         return {"error": f"Erreur critique lors de l'analyse: {str(e)[:100]}"}
 
 # Serve the frontend statically

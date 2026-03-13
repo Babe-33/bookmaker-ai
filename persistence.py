@@ -3,7 +3,11 @@ import json
 import time
 import requests
 
+import threading
+
 DB_PATH = "database.json"
+# Global lock to prevent race conditions between bankroll updates and cache writes
+db_lock = threading.Lock()
 
 def load_db():
     firebase_url = os.getenv("FIREBASE_URL")
@@ -21,35 +25,34 @@ def load_db():
         except Exception as e:
             print(f"Firebase connection error: {e}. Falling back to local DB.")
             
-    if not os.path.exists(DB_PATH):
-        try:
-            with open(DB_PATH, "w", encoding="utf-8") as f: 
-                json.dump(default, f, ensure_ascii=False)
-            return default
-        except:
-            return default
-
-    # Robust local load
-    try:
-        with open(DB_PATH, "r", encoding="utf-8") as f: 
-            data = json.load(f)
-            # Basic validation: must be a dict
-            if isinstance(data, dict):
-                return data
-            raise ValueError("Corrupt database structure")
-    except Exception as e:
-        print(f"CRITICAL: Failed to load database: {e}")
-        # Try to load backup if exists
-        backup_path = DB_PATH + ".bak"
-        if os.path.exists(backup_path):
+    with db_lock:
+        if not os.path.exists(DB_PATH):
             try:
-                with open(backup_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except: pass
-        return default
+                with open(DB_PATH, "w", encoding="utf-8") as f: 
+                    json.dump(default, f, ensure_ascii=False)
+                return default
+            except:
+                return default
+
+        # Robust local load
+        try:
+            with open(DB_PATH, "r", encoding="utf-8") as f: 
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+                raise ValueError("Corrupt database structure")
+        except Exception as e:
+            print(f"CRITICAL: Failed to load database: {e}")
+            backup_path = DB_PATH + ".bak"
+            if os.path.exists(backup_path):
+                try:
+                    with open(backup_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except: pass
+            return default
 
 def save_db(data):
-    """Saves database using ATOMIC write to prevent corruption."""
+    """Saves database using ATOMIC write + LOCK to prevent corruption/race conditions."""
     firebase_url = os.getenv("FIREBASE_URL")
     if firebase_url:
         try:
@@ -57,26 +60,21 @@ def save_db(data):
         except Exception as e:
             print(f"Firebase save error: {e}")
             
-    # Atomic Local Save: Always write to temp then rename
-    tmp_path = DB_PATH + ".tmp"
-    bak_path = DB_PATH + ".bak"
-    try:
-        # 1. Write to temporary file
-        with open(tmp_path, "w", encoding="utf-8") as f: 
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        
-        # 2. Create backup of current state if exists
-        if os.path.exists(DB_PATH):
-            import shutil
-            shutil.copy2(DB_PATH, bak_path)
+    with db_lock:
+        tmp_path = DB_PATH + ".tmp"
+        bak_path = DB_PATH + ".bak"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f: 
+                json.dump(data, f, indent=4, ensure_ascii=False)
             
-        # 3. Rename temp to real (Atomic on most OS)
-        import os as _os
-        if _os.path.exists(tmp_path):
+            if os.path.exists(DB_PATH):
+                import shutil
+                shutil.copy2(DB_PATH, bak_path)
+                
+            import os as _os
             _os.replace(tmp_path, DB_PATH)
-            
-    except Exception as e:
-        print(f"CRITICAL: Failed to save database locally: {e}")
+        except Exception as e:
+            print(f"CRITICAL: Failed to save database locally: {e}")
 
 def get_cache(key, ttl=3600):
     """

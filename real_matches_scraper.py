@@ -23,6 +23,10 @@ def convert_american_to_decimal(american_odds):
 
 def get_the_odds_api_matches(api_key, force_refresh=False):
     """Fetches matches from The-Odds-API directly if the user provided a key."""
+    if not api_key:
+        print("WARNING: THE_ODDS_API_KEY is missing from environment. F1 and Magnus data restricted to basics.")
+        return []
+    
     global _ODDS_API_CACHE
     global CACHE_EXPIRY
     
@@ -252,7 +256,9 @@ def scrape_real_matches(leagues=None, force_refresh=False):
             ("Rugby", "rugb", "rugby", "six.nations", "Six Nations"),
             ("Rugby", "rugb", "rugby", "champions.cup", "Champions Cup"),
             ("Basket", "bask", "basketball", "nba", "NBA"),
-            ("Basket", "bask", "basketball", "euro", "Euroleague")
+            ("Basket", "bask", "basketball", "euro", "Euroleague"),
+            ("Hockey", "iceh", "hockey", "fra.1", "Ligue Magnus"),
+            ("F1", "auto", "racing", "f1", "Formula 1")
         ]
     
     espn_matches = []

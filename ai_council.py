@@ -11,36 +11,53 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# We completely remove dynamic discovery. The legacy SDK fails to alias models correctly,
-# resulting in 404 Not Found on Render. We use the absolute, explicit latest model.
-EXPLICIT_MODEL = "models/gemini-1.5-flash-latest"
+# Robust list of models to try. Some regions/keys require prefixes, others don't.
+MODEL_CANDIDATES = [
+    "models/gemini-1.5-flash-latest",
+    "gemini-1.5-flash",
+    "models/gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "models/gemini-pro"
+]
+_WORKING_MODEL_CACHE = None
 
 async def call_gemini_safe(prompt, data_context, timeout=40):
-    """Call Gemini explicitly with strict timeout."""
+    """Call Gemini with multi-model fallback to solve 404 errors."""
+    global _WORKING_MODEL_CACHE
     key = os.getenv("GEMINI_API_KEY")
     if not key: return "Erreur: Clé API manquante dans l'environnement."
     
     clean_key = str(key).strip().strip("'").strip('"').strip()
     genai.configure(api_key=clean_key)
     
-    try:
-        model = genai.GenerativeModel(EXPLICIT_MODEL)
-        full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
-        
-        response = await asyncio.wait_for(
-            asyncio.to_thread(model.generate_content, full_prompt),
-            timeout=timeout
-        )
-        return response.text if response else ""
-    except asyncio.TimeoutError:
-        print(f"Gemini Timeout sur {EXPLICIT_MODEL}")
-        return "TIMEOUT"
-    except Exception as e:
-        err_str = str(e).lower()
-        print(f"Gemini Error ({EXPLICIT_MODEL}): {e}")
-        if "quota" in err_str or "429" in err_str: return "ERROR:QUOTA"
-        if "404" in err_str: return "ERROR:404"
-        return ""
+    # Try the cached working model first
+    models_to_test = ([_WORKING_MODEL_CACHE] if _WORKING_MODEL_CACHE else []) + MODEL_CANDIDATES
+    
+    last_error = ""
+    for model_name in models_to_test:
+        if not model_name: continue
+        try:
+            model = genai.GenerativeModel(model_name)
+            full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
+            
+            response = await asyncio.wait_for(
+                asyncio.to_thread(model.generate_content, full_prompt),
+                timeout=timeout
+            )
+            if response:
+                _WORKING_MODEL_CACHE = model_name # Save for next time
+                return response.text
+        except asyncio.TimeoutError:
+            return "TIMEOUT"
+        except Exception as e:
+            last_error = str(e).lower()
+            print(f"Gemini Attempt ({model_name}) failed: {e}")
+            if "quota" in last_error or "429" in last_error: return "ERROR:QUOTA"
+            # If 404, we continue to the next candidate
+            if "404" in last_error: continue
+            return f"ERROR:UNEXPECTED ({model_name})"
+            
+    return "ERROR:404" # None of the candidates worked
 
 def extract_json(text):
     if not text: return None

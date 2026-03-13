@@ -9,7 +9,9 @@ import json
 import requests
 from datetime import datetime
 
-from ai_council import run_ai_council, run_statistician, run_expert, run_pessimist, run_trend, run_bookmaker, fetch_live_web_data, generate_daily_brief
+import time
+import ai_council as council
+import real_matches_scraper as scraper
 from persistence import load_db, save_db, record_bet, update_bet_result, get_bankroll_stats
 
 # --- Models ---
@@ -113,81 +115,80 @@ async def set_bet_result(data: BetResultRequest):
 async def get_matches(force_refresh: bool = False):
     global current_matches_cache
     if not current_matches_cache or force_refresh:
-        new_matches = await fetch_live_web_data(force_refresh)
+        new_matches = await scraper.fetch_live_web_data(force_refresh)
         if new_matches or not current_matches_cache:
             current_matches_cache = new_matches
     return {"matches": current_matches_cache}
 
-@app.get("/api/journal/brief")
+# --- Shared Analysis Global Cache ---
+_LAST_MATCHES = None
+_LAST_SCRAPE_TIME = 0
+
+async def get_shared_matches():
+    global _LAST_MATCHES, _LAST_SCRAPE_TIME
+    now = time.time()
+    # Cache matches for 5 minutes during analysis session
+    if not _LAST_MATCHES or (now - _LAST_SCRAPE_TIME) > 300:
+        print("MAIN: Refreshing shared matches for analysis...")
+        _LAST_MATCHES = await scraper.fetch_live_web_data(force_refresh=True)
+        _LAST_SCRAPE_TIME = now
+    return _LAST_MATCHES
+
+@app.get("/api/briefing")
 async def get_daily_brief_endpoint():
-    global current_matches_cache
     try:
-        if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-        text = await generate_daily_brief(current_matches_cache)
+        matches = await get_shared_matches()
+        if not matches: return {"text": "Désolé, aucun match disponible."}
+        text = await council.generate_daily_brief(matches)
         return {"text": text}
     except Exception as e:
         return {"text": f"Briefing indisponible: {str(e)[:50]}"}
 
-@app.get("/api/council/statistician")
+@app.get("/api/council/stat")
 async def get_council_stat():
-    global current_matches_cache
-    try:
-        if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-        return {"text": await run_statistician(current_matches_cache)}
-    except Exception as e:
-        return {"text": f"Erreur Stat: {str(e)[:50]}"}
+    matches = await get_shared_matches()
+    if not matches: return {"text": "Désolé, aucun match disponible."}
+    return {"text": await council.run_expert_micro("stat", matches)}
 
-@app.get("/api/council/expert")
-async def get_council_expert():
-    global current_matches_cache
-    try:
-        if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-        return {"text": await run_expert(current_matches_cache)}
-    except Exception as e:
-        return {"text": f"Erreur Expert: {str(e)[:50]}"}
+@app.get("/api/council/field")
+async def get_council_field():
+    matches = await get_shared_matches()
+    if not matches: return {"text": "Désolé, aucun match disponible."}
+    return {"text": await council.run_expert_micro("field", matches)}
 
 @app.get("/api/council/pessimist")
 async def get_council_pessimist():
-    global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    return {"text": await run_pessimist(current_matches_cache)}
+    matches = await get_shared_matches()
+    if not matches: return {"text": "Désolé, aucun match disponible."}
+    return {"text": await council.run_expert_micro("pessimist", matches)}
 
 @app.get("/api/council/trend")
 async def get_council_trend():
-    global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    return {"text": await run_trend(current_matches_cache)}
+    matches = await get_shared_matches()
+    if not matches: return {"text": "Désolé, aucun match disponible."}
+    return {"text": await council.run_expert_micro("trend", matches)}
 
-class TicketRequest(BaseModel):
-    stat_text: str
-    expert_text: str
-    pessimist_text: str
-    trend_text: str
-
-@app.post("/api/council/ticket")
-async def get_council_ticket(req: TicketRequest):
-    global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    result = await run_bookmaker(current_matches_cache, req.stat_text, req.expert_text, req.pessimist_text, req.trend_text)
-    return {"ticket": result["ticket"]}
+@app.get("/api/council/tickets")
+async def get_council_tickets():
+    matches = await get_shared_matches()
+    if not matches: return {"error": "Aucun match disponible."}
+    tickets = await council.run_tickets_micro(matches)
+    if not tickets: return {"error": "L'IA n'a pas pu générer les tickets (Timeout). Réessayez."}
+    return {"tickets": tickets}
 
 @app.get("/api/council/full")
 async def get_council_all():
-    global current_matches_cache
+    # Legacy support: we'll just return an error and advise using the new buttons if needed,
+    # OR we can keep it as a fallback. Let's keep it but make it very robust.
     try:
-        if not current_matches_cache: 
-            current_matches_cache = await fetch_live_web_data()
-        
-        if not current_matches_cache:
-            return {"error": "Aucun match disponible pour l'analyse."}
-            
-        result = await run_bookmaker(current_matches_cache)
-        return result
+        matches = await get_shared_matches()
+        if not matches: return {"error": "Aucun match disponible."}
+        return await council.run_full_analysis(matches, force_refresh=True)
     except Exception as e:
         import traceback
         print(f"Full analysis error: {e}")
         traceback.print_exc()
-        return {"error": f"Erreur critique lors de l'analyse: {str(e)[:100]}"}
+        return {"error": f"Erreur critique: {str(e)[:50]}"}
 
 # Serve the frontend statically
 app.mount("/static", StaticFiles(directory="static"), name="static")

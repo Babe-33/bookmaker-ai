@@ -113,88 +113,54 @@ def build_match_context(matches):
         ctx += f"#{m.get('id')}: {m.get('homeTeam')} vs {m.get('awayTeam')} ({o_str})\n"
     return ctx
 
-async def run_full_analysis(matches, force_refresh=False):
-    """PHASE 111: Clean State Restart. Focused on stability and error visibility."""
-    if not matches: return {"error": "Pas de matchs."}
-    
-    m_hash = str(len(matches))
-    cache_key = f"analysis_clean_state_v111_{m_hash}"
-    cached = get_cache(cache_key, ttl=3600)
-    if not force_refresh and cached: return cached
-
+async def run_expert_micro(expert_id, matches):
+    """Pinpoint analysis for a specific expert."""
     context = build_match_context(matches)
+    prompts = {
+        "stat": "Analyse mathématiquement ces matchs (value bets). Fais 2 phrases très courtes. PAS DE JSON.",
+        "field": "Analyse les dynamiques et enjeux terrain. Fais 2 phrases très courtes. PAS DE JSON.",
+        "pessimist": "Quels sont les pièges évidents ? Fais 2 phrases très courtes. PAS DE JSON.",
+        "trend": "Quelle est la tendance des parieurs pros ? Fais 2 phrases très courtes. PAS DE JSON."
+    }
+    prompt = prompts.get(expert_id, "Fais une analyse rapide.")
+    res = await call_gemini_safe(prompt, context, timeout=15)
+    return res if res not in ["TIMEOUT", "ERROR:QUOTA", "ERROR:404", ""] else "Indisponible actuellement."
 
-    prompt = """Tu es le SYSTÈME ANALYTIQUE SUPRÊME.
-    Génère une analyse experte courte et les 3 Meilleurs Tickets (Safe, Équilibré, Osé).
-    
-    STRUCTURE EXACTE À RENVOYER EN JSON (RIEN D'AUTRE) :
+async def run_tickets_micro(matches):
+    """Pinpoint generation of the 3 tickets only."""
+    context = build_match_context(matches)
+    prompt = """Tu es le Banquier. Génère UNIQUEMENT ce JSON EXACT pour 3 tickets (Safe, Équililibré, Osé), sans aucun texte autour :
     {
-      "statistician": "2 phrases : Analyse math",
-      "expert": "2 phrases : Analyse terrain",
-      "pessimist": "2 phrases : Les pièges",
-      "trend": "2 phrases : La tendance",
-      "predictions": {
-          "id_match_1": {"bet": "1", "confidence": 80, "reason": "Motif court"}
-      },
       "tickets": { 
-          "safe": {"total_odds": 1.5, "suggested_stake": 5.0, "selections": [{"match": "Equipe A vs B", "bet": "1", "odds": 1.5, "reason": "Explication"}]},
-          "balanced": {"total_odds": 4.5, "suggested_stake": 3.0, "selections": []},
-          "risky": {"total_odds": 15.0, "suggested_stake": 1.0, "selections": []}
+          "safe": {"total_odds": 1.5, "suggested_stake": 5.0, "selections": [{"match": "Match A vs B", "bet": "1", "odds": 1.5, "reason": "Base"}]}, 
+          "balanced": {"total_odds": 4.5, "suggested_stake": 3.0, "selections": []}, 
+          "risky": {"total_odds": 15.0, "suggested_stake": 1.0, "selections": []} 
       }
     }"""
+    res = await call_gemini_safe(prompt, context, timeout=20)
+    data = extract_json(res)
+    if not data or "tickets" not in data: return None
+    return data["tickets"]
 
-    print("AI COUNCIL (Clean State): Starting full analysis call...")
+async def run_full_analysis(matches, force_refresh=False):
+    """Compatibility wrapper for the old 'Full' button, but now uses the new micro-logic."""
+    # (Existing logic but calling our new micros to be consistent)
+    # This will be used as a fallback or for the 'Full' button if still in use.
+    # For maximum stability, we recommend using the individual endpoints.
+    stat = await run_expert_micro("stat", matches)
+    field = await run_expert_micro("field", matches)
+    pessimist = await run_expert_micro("pessimist", matches)
+    trend = await run_expert_micro("trend", matches)
+    tickets = await run_tickets_micro(matches)
     
-    try:
-        # 1. Discover model fast
-        model_name = await discover_best_model()
-        if not model_name:
-            return {"error": "ERREUR CRITIQUE: Impossible de trouver un modèle IA autorisé avec cette clé."}
-        
-        # 2. Call model with a safe 25s timeout
-        model = genai.GenerativeModel(model_name)
-        full_prompt = f"{prompt}\n\nDATA:\n{context}"
-        
-        response = await asyncio.wait_for(
-            asyncio.to_thread(model.generate_content, full_prompt),
-            timeout=25
-        )
-        
-        if not response or not response.text:
-            return {"error": "ERREUR: L'IA a répondu avec un message vide."}
-            
-        res_text = response.text
-        
-    except asyncio.TimeoutError:
-        return {"error": "TIMEOUT: L'IA a mis plus de 25s. Le serveur a coupé la connexion. Réessayez."}
-    except Exception as e:
-        err_str = str(e).lower()
-        if "quota" in err_str or "429" in err_str: return {"error": "QUOTA: Votre limite Google API est atteinte pour aujourd'hui."}
-        if "404" in err_str: return {"error": "ERREUR 404: Modèle introuvable. Vérifiez votre clé sur Render."}
-        return {"error": f"ERREUR API: {str(e)[:100]}"}
-
-    # 3. Aggressive JSON Extraction
-    print(f"AI COUNCIL: Parsing response... ({len(res_text)} chars)")
-    data = extract_json(res_text)
-    
-    if not data or "tickets" not in data:
-        # If extraction completely fails, show the raw text in the error so the user and developer can see what the AI actually did
-        raw_preview = res_text[:150].replace('\n', ' ')
-        return {"error": f"ERREUR JSON: L'IA n'a pas respecté le format. Extrait: '{raw_preview}...'"}
-
-    # 4. Data integrity guarantee
-    if "predictions" not in data: data["predictions"] = {}
-    if "statistician" not in data: data["statistician"] = "Analyse non générée."
-    if "expert" not in data: data["expert"] = "Analyse non générée."
-    if "pessimist" not in data: data["pessimist"] = "Analyse non générée."
-    if "trend" not in data: data["trend"] = "Analyse non générée."
-    
-    for strategy in ["safe", "balanced", "risky"]:
-        if strategy not in data["tickets"]: 
-            data["tickets"][strategy] = {"total_odds": 0, "suggested_stake": 0, "selections": []}
-            
-    set_cache(cache_key, data)
-    return data
+    return {
+        "statistician": stat,
+        "expert": field,
+        "pessimist": pessimist,
+        "trend": trend,
+        "predictions": {},
+        "tickets": tickets or {}
+    }
 
 
 async def generate_daily_brief(matches):

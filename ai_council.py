@@ -124,18 +124,41 @@ async def run_full_analysis(matches, force_refresh=False):
 
     context = build_match_context(matches)
 
-    prompt = """MISSION: 3 TICKETS GAGNANTS (SAFE, BALANCED, RISKY). SOIS ULTRA CONCIS.
-    FORMAT JSON STRICT (NE METS RIEN D'AUTRE):
+    prompt = """Tu es le SYSTÈME ANALYTIQUE SUPRÊME.
+    Génère une analyse experte complète et les 3 Meilleurs Tickets (Safe, Équilibré, Osé).
+    
+    STRUCTURE EXACTE À RENVOYER :
     {
+      "statistician": "Analyse mathématique globale des matchs (les value bets).",
+      "expert": "Analyse terrain (dynamiques d'équipe, contexte).",
+      "pessimist": "Les pièges à éviter aujourd'hui.",
+      "trend": "La tendance générale des parieurs.",
+      "predictions": {
+          "id_match_1": {"bet": "1", "confidence": 80, "reason": "Motif court"},
+          "id_match_2": {"bet": "N2", "confidence": 60, "reason": "Motif"}
+      },
       "tickets": { 
-          "safe": {"total_odds": 1.5, "suggested_stake": 5, "selections": [{"match": "X vs Y", "bet": "1", "odds": 1.5, "reason": "Motif bref"}]},
-          "balanced": {"total_odds": 4.0, "suggested_stake": 3, "selections": []},
-          "risky": {"total_odds": 12.0, "suggested_stake": 1, "selections": []}
+          "safe": {
+              "total_odds": 1.5, 
+              "suggested_stake": 5.0,
+              "selections": [{"match": "Equipe A vs B", "bet": "1", "odds": 1.5, "reason": "Base solide"}]
+          }, 
+          "balanced": {
+              "total_odds": 4.5, 
+              "suggested_stake": 3.0,
+              "selections": []
+          }, 
+          "risky": {
+              "total_odds": 15.0, 
+              "suggested_stake": 1.0,
+              "selections": []
+          } 
       }
     }"""
 
+    # Retain the 25s timeout as this is a strict Render limit.
     res = await call_gemini_safe(prompt, context, timeout=25)
-    if res == "TIMEOUT": return {"error": "L'IA a mis trop de temps (>30s). Le serveur Render est surchargé. Réessayez."}
+    if res == "TIMEOUT": return {"error": "L'IA a mis trop de temps (>30s). Le serveur est surchargé. Réessayez."}
     if res == "ERROR:QUOTA": return {"error": "Google API: Quota épuisé."}
     if res == "ERROR:404": return {"error": "Google API: Erreur 404 (Modèle)."}
     if not res: return {"error": "IA inactive. Vérifiez vos clés."}
@@ -143,12 +166,7 @@ async def run_full_analysis(matches, force_refresh=False):
     data = extract_json(res)
     
     if data and "tickets" in data:
-        # Provide default texts to prevent frontend crash
-        data["statistician"] = "La variance a été calculée. Les tickets proposés représentent le meilleur compromis."
-        data["expert"] = "Analyse validée. Les dynamiques d'équipe favorisent ces sélections."
-        data["pessimist"] = "Attention aux blessures de dernière minute, mais le risque est calculé."
-        data["trend"] = "Le consensus s'aligne sur ces matchs clés."
-        data["predictions"] = {}
+        if "predictions" not in data: data["predictions"] = {}
         for strategy in ["safe", "balanced", "risky"]:
             if strategy not in data["tickets"]: 
                 data["tickets"][strategy] = {"total_odds": 0, "suggested_stake": 0, "selections": []}

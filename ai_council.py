@@ -12,7 +12,7 @@ load_dotenv()
 
 # Global WORKING_MODEL to avoid repeated 404s
 _WORKING_MODEL = None
-STABLE_MODELS = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+STABLE_MODELS = ["models/gemini-1.5-flash", "models/gemini-1.5-pro"]
 
 async def call_persona_with_retry(prompt, data_context):
     """Legacy SDK version with robust multi-model fallback."""

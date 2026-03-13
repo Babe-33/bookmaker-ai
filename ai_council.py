@@ -11,53 +11,94 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Robust list of models to try. Some regions/keys require prefixes, others don't.
-MODEL_CANDIDATES = [
-    "models/gemini-1.5-flash-latest",
-    "gemini-1.5-flash",
-    "models/gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "models/gemini-pro"
-]
-_WORKING_MODEL_CACHE = None
+# Global state for persistent model tracking
+_WORKING_MODEL = None
+_DISCOVERY_DONE = False
+_LOCK = asyncio.Lock()
+
+async def discover_best_model():
+    """Uses list_models() to find the best available model, or falls back to brute force."""
+    global _WORKING_MODEL, _DISCOVERY_DONE
+    if _DISCOVERY_DONE: return _WORKING_MODEL
+
+    async with _LOCK:
+        if _DISCOVERY_DONE: return _WORKING_MODEL
+        
+        key = os.getenv("GEMINI_API_KEY")
+        if not key: return None
+        
+        # Rigorously clean the API key (fixes Render/dotenv quote issues)
+        clean_key = str(key).strip().strip("'").strip('"').strip()
+        genai.configure(api_key=clean_key)
+
+        print("AI COUNCIL: Starting Advanced Discovery...")
+        try:
+            # Try to list models to see exactly what is allowed
+            available_models = []
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    available_models.append(m.name)
+            
+            if available_models:
+                # Prioritize Flash 1.5 for speed
+                flash_models = [m for m in available_models if "flash" in m and "1.5" in m]
+                if flash_models:
+                    _WORKING_MODEL = flash_models[0]
+                else:
+                    _WORKING_MODEL = available_models[0]
+                
+                print(f"AI COUNCIL: Auto-discovered model -> {_WORKING_MODEL}")
+                _DISCOVERY_DONE = True
+                return _WORKING_MODEL
+        except Exception as e:
+            print(f"AI COUNCIL: list_models() failed: {e}. Switching to Brute Force.")
+
+        # Brute Force Fallback if list_models() is restricted
+        candidates = [
+            "gemini-1.5-flash", 
+            "models/gemini-1.5-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro",
+            "models/gemini-2.0-flash-exp",
+            "gemini-pro"
+        ]
+        
+        for name in candidates:
+            try:
+                model = genai.GenerativeModel(name)
+                # Quick test
+                await asyncio.to_thread(model.generate_content, "test", generation_config={"max_output_tokens": 5})
+                _WORKING_MODEL = name
+                _DISCOVERY_DONE = True
+                print(f"AI COUNCIL: Brute Force Success -> {name}")
+                return name
+            except:
+                continue
+        
+        return None
 
 async def call_gemini_safe(prompt, data_context, timeout=40):
-    """Call Gemini with multi-model fallback to solve 404 errors."""
-    global _WORKING_MODEL_CACHE
-    key = os.getenv("GEMINI_API_KEY")
-    if not key: return "Erreur: Clé API manquante dans l'environnement."
-    
-    clean_key = str(key).strip().strip("'").strip('"').strip()
-    genai.configure(api_key=clean_key)
-    
-    # Try the cached working model first
-    models_to_test = ([_WORKING_MODEL_CACHE] if _WORKING_MODEL_CACHE else []) + MODEL_CANDIDATES
-    
-    last_error = ""
-    for model_name in models_to_test:
-        if not model_name: continue
-        try:
-            model = genai.GenerativeModel(model_name)
-            full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
-            
-            response = await asyncio.wait_for(
-                asyncio.to_thread(model.generate_content, full_prompt),
-                timeout=timeout
-            )
-            if response:
-                _WORKING_MODEL_CACHE = model_name # Save for next time
-                return response.text
-        except asyncio.TimeoutError:
-            return "TIMEOUT"
-        except Exception as e:
-            last_error = str(e).lower()
-            print(f"Gemini Attempt ({model_name}) failed: {e}")
-            if "quota" in last_error or "429" in last_error: return "ERROR:QUOTA"
-            # If 404, we continue to the next candidate
-            if "404" in last_error: continue
-            return f"ERROR:UNEXPECTED ({model_name})"
-            
-    return "ERROR:404" # None of the candidates worked
+    """Call Gemini with autonomous discovery fallback."""
+    model_name = await discover_best_model()
+    if not model_name:
+        return "ERROR:404"
+
+    try:
+        model = genai.GenerativeModel(model_name)
+        full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
+        
+        response = await asyncio.wait_for(
+            asyncio.to_thread(model.generate_content, full_prompt),
+            timeout=timeout
+        )
+        return response.text if response else ""
+    except asyncio.TimeoutError:
+        return "TIMEOUT"
+    except Exception as e:
+        err_str = str(e).lower()
+        if "quota" in err_str or "429" in err_str: return "ERROR:QUOTA"
+        if "404" in err_str: return "ERROR:404"
+        return ""
 
 def extract_json(text):
     if not text: return None

@@ -13,44 +13,51 @@ load_dotenv()
 
 # Global state
 _WORKING_MODEL = None
-_DISCOVERY_DONE = False
-_LOCK = asyncio.Lock()
+STABLE_NAMES = ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-1.5-pro"]
 
-async def discover_best_model():
-    global _WORKING_MODEL, _DISCOVERY_DONE
-    if _DISCOVERY_DONE: return _WORKING_MODEL
-    async with _LOCK:
-        if _DISCOVERY_DONE: return _WORKING_MODEL
-        key = os.getenv("GEMINI_API_KEY")
-        if not key: return None
-        key = key.strip('"').strip("'")
-        genai.configure(api_key=key)
-        
-        # Test basic Flash first
-        for name in ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-1.5-pro"]:
-            try:
-                model = genai.GenerativeModel(name)
-                await asyncio.to_thread(model.generate_content, "hi", generation_config={"max_output_tokens": 5})
-                _WORKING_MODEL = name
-                _DISCOVERY_DONE = True
-                return name
-            except: continue
-        return "gemini-1.5-flash" # Fallback
+async def get_model_name():
+    """Simple model selector with fallback."""
+    global _WORKING_MODEL
+    if _WORKING_MODEL: return _WORKING_MODEL
+    
+    key = os.getenv("GEMINI_API_KEY")
+    if not key: return None
+    genai.configure(api_key=key.strip('"').strip("'"))
+    
+    # Quick test the most likely one
+    for name in STABLE_NAMES:
+        try:
+            model = genai.GenerativeModel(name)
+            await asyncio.to_thread(model.generate_content, "hi", generation_config={"max_output_tokens": 5})
+            _WORKING_MODEL = name
+            return name
+        except: continue
+    return "gemini-1.5-flash"
 
-async def call_gemini(prompt, data_context):
-    model_name = await discover_best_model()
+async def call_gemini_safe(prompt, data_context, timeout=25):
+    """Call Gemini with a strict timeout and error handling."""
+    model_name = await get_model_name()
     try:
         model = genai.GenerativeModel(model_name)
         full_prompt = f"{prompt}\n\nDONNÉES :\n{data_context}"
-        response = await asyncio.to_thread(model.generate_content, full_prompt)
+        
+        # Wrapped in a timeout to prevent infinite hangs
+        response = await asyncio.wait_for(
+            asyncio.to_thread(model.generate_content, full_prompt),
+            timeout=timeout
+        )
         return response.text if response else ""
+    except asyncio.TimeoutError:
+        print(f"Gemini Timeout for model {model_name}")
+        return "TIMEOUT"
     except Exception as e:
-        print(f"Gemini Error: {e}")
+        print(f"Gemini Error ({model_name}): {e}")
         return ""
 
 def extract_json(text):
     if not text: return None
     try:
+        # Clean markdown
         text = re.sub(r'```(?:json)?', '', text)
         text = re.sub(r'```', '', text)
         start = text.find('{')
@@ -71,54 +78,50 @@ async def fetch_live_web_data(force_refresh=False):
 
 def build_match_context(matches):
     ctx = ""
-    for m in matches[:10]:
+    for m in matches[:10]: # Limit for speed
         ctx += f"- {m.get('homeTeam')} vs {m.get('awayTeam')} | ID: {m.get('id')} | Cotes: {m.get('odds')}\n"
     return ctx
 
 async def run_full_analysis(matches, force_refresh=False):
-    """SPLIT STRATEGY: 2 separate calls for maximum speed and detail."""
+    """SEQUENTIAL STRATEGY: One by one to avoid overloading Render CPU/Network."""
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_split_v88_{m_hash}"
+    cache_key = f"analysis_seq_v89_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    # CALL 1: The Council (Personalities)
-    council_prompt = """Tu es le Conseil des Intelligences. Retourne un JSON pur :
-    { "statistician": "...", "expert": "...", "pessimist": "...", "trend": "..." }
-    Sois bref et pro."""
+    # 1. Council Call
+    council_prompt = """Retourne UNIQUEMENT un JSON : { "statistician": "...", "expert": "...", "pessimist": "...", "trend": "..." }
+    Fais une analyse brève du Conseil."""
+    res_council = await call_gemini_safe(council_prompt, context)
+    if res_council == "TIMEOUT": return {"error": "L'IA est trop lente sur ce serveur. Réessayez."}
     
-    # CALL 2: The Predictions & Tickets (Detailed)
-    pred_prompt = """Tu es l'Analyste de Précision. Analyse CHAQUE match de la liste et retourne un JSON pur :
-    { 
-      "predictions": { "ID": {"bet": "Pari suggéré", "confidence": 85, "reason": "..."} },
-      "tickets": { "safe": {...}, "balanced": {...}, "risky": {...} }
-    }"""
+    # 2. Predictions Call
+    pred_prompt = f"""Analyse CHAQUE match et retourne UNIQUEMENT un JSON :
+    {{ 
+      "predictions": {{ "ID": {{"bet": "...", "confidence": 85, "reason": "..."}} }},
+      "tickets": {{ "safe": {{...}}, "balanced": {{...}}, "risky": {{...}} }}
+    }}"""
+    res_pred = await call_gemini_safe(pred_prompt, context, timeout=40)
+    if res_pred == "TIMEOUT": return {"error": "Le calcul des pronostics a expiré. Relancez."}
 
-    # Run calls in parallel for speed
-    results = await asyncio.gather(
-        call_gemini(council_prompt, context),
-        call_gemini(pred_prompt, context)
-    )
+    data_council = extract_json(res_council) or {}
+    data_pred = extract_json(res_pred) or {}
 
-    council_data = extract_json(results[0]) or {}
-    pred_data = extract_json(results[1]) or {}
-
-    # Merge results
-    final_data = {**council_data, **pred_data}
-    
-    if final_data:
+    final_data = {**data_council, **data_pred}
+    if "predictions" in final_data:
         set_cache(cache_key, final_data)
         return final_data
     
-    return {"error": "Format IA invalide."}
+    return {"error": "IA a renvoyé une réponse incomplète."}
 
 async def generate_daily_brief(matches):
     if not matches: return "Aucun match."
-    return await call_gemini("Fais un briefing Directeur de 3 phrases.", build_match_context(matches[:5]))
+    res = await call_gemini_safe("Fais un briefing Directeur de 2 phrases.", build_match_context(matches[:5]))
+    return res if res not in ["TIMEOUT", ""] else "Briefing indisponible."
 
 # Compatibility wrappers
 async def run_statistician(matches):

@@ -83,45 +83,47 @@ def build_match_context(matches):
     return ctx
 
 async def run_full_analysis(matches, force_refresh=False):
-    """SEQUENTIAL STRATEGY: One by one to avoid overloading Render CPU/Network."""
+    """SINGLE CALL STRATEGY: Optimized prompt for speed."""
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_seq_v89_{m_hash}"
+    cache_key = f"analysis_ticket_focus_v90_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    # 1. Council Call
-    council_prompt = """Retourne UNIQUEMENT un JSON : { "statistician": "...", "expert": "...", "pessimist": "...", "trend": "..." }
-    Fais une analyse brève du Conseil."""
-    res_council = await call_gemini_safe(council_prompt, context)
-    if res_council == "TIMEOUT": return {"error": "L'IA est trop lente sur ce serveur. Réessayez."}
+    prompt = """Tu es le Conseil des Intelligences. Ta mission est d'optimiser le temps et la pertinence:
+    1. Analyse les rencontres pour trouver les MEILLEURS matchs et construire tes 3 tickets (safe, balanced, risky).
+    2. Pour ces tickets, donne des analyses expertes dans les sections statistician, expert, pessimist, trend.
+    3. Pour TOUS les autres matchs, fournis JUSTE le pronostic direct dans 'predictions', SANS explication détaillée (raison très courte).
     
-    # 2. Predictions Call
-    pred_prompt = f"""Analyse CHAQUE match et retourne UNIQUEMENT un JSON :
-    {{ 
-      "predictions": {{ "ID": {{"bet": "...", "confidence": 85, "reason": "..."}} }},
-      "tickets": {{ "safe": {{...}}, "balanced": {{...}}, "risky": {{...}} }}
-    }}"""
-    res_pred = await call_gemini_safe(pred_prompt, context, timeout=40)
-    if res_pred == "TIMEOUT": return {"error": "Le calcul des pronostics a expiré. Relancez."}
+    Retourne UNIQUEMENT un JSON pur :
+    {
+      "statistician": "Ton avis sur les tickets choisis (super court)",
+      "expert": "Ton avis sur les tickets choisis (super court)",
+      "pessimist": "Les pièges des tickets choisis (super court)",
+      "trend": "La tendance globale (super court)",
+      "predictions": { "ID": {"bet": "Pari suggéré (ex: 1, N, 2)", "confidence": 80, "reason": "1 mot"} },
+      "tickets": { "safe": {...}, "balanced": {...}, "risky": {...} }
+    }"""
 
-    data_council = extract_json(res_council) or {}
-    data_pred = extract_json(res_pred) or {}
+    res = await call_gemini_safe(prompt, context, timeout=40)
+    if res == "TIMEOUT": return {"error": "L'IA est trop lente sur ce serveur. Réessayez."}
 
-    final_data = {**data_council, **data_pred}
-    if "predictions" in final_data:
-        set_cache(cache_key, final_data)
-        return final_data
+    data = extract_json(res) or {}
+    
+    if "predictions" in data:
+        set_cache(cache_key, data)
+        return data
     
     return {"error": "IA a renvoyé une réponse incomplète."}
 
 async def generate_daily_brief(matches):
     if not matches: return "Aucun match."
-    res = await call_gemini_safe("Fais un briefing Directeur de 2 phrases.", build_match_context(matches[:5]))
+    res = await call_gemini_safe("Fais un briefing Directeur de 2 phrases sur les meilleurs matchs du jour.", build_match_context(matches[:5]))
     return res if res not in ["TIMEOUT", ""] else "Briefing indisponible."
+
 
 # Compatibility wrappers
 async def run_statistician(matches):

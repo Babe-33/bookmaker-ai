@@ -264,7 +264,11 @@ def update_bet_result(bet_id, result):
                 
                 if result == "WON":
                     gain = bet.get("potential_gain", 0)
-                    db["bankroll"]["balance"] = round(db["bankroll"].get("balance", 0) + gain, 2)
+                    stake = bet.get("stake", 0)
+                    # User prefers adding only the NET PROFIT to the remaining balance
+                    # Balance already deducted the stake when recorded.
+                    net_profit = round(gain - stake, 2)
+                    db["bankroll"]["balance"] = round(db["bankroll"].get("balance", 0) + net_profit, 2)
                 elif result == "VOID":
                     # Refund the stake
                     stake = bet.get("stake", 0)

@@ -119,16 +119,23 @@ async def get_matches(force_refresh: bool = False):
     return {"matches": current_matches_cache}
 
 @app.get("/api/journal/brief")
-async def get_daily_brief():
+async def get_daily_brief_endpoint():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    return {"text": await generate_daily_brief(current_matches_cache)}
+    try:
+        if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
+        text = await generate_daily_brief(current_matches_cache)
+        return {"text": text}
+    except Exception as e:
+        return {"text": f"Briefing indisponible: {str(e)[:50]}"}
 
 @app.get("/api/council/statistician")
 async def get_council_stat():
     global current_matches_cache
-    if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
-    return {"text": await run_statistician(current_matches_cache)}
+    try:
+        if not current_matches_cache: current_matches_cache = await fetch_live_web_data()
+        return {"text": await run_statistician(current_matches_cache)}
+    except Exception as e:
+        return {"text": f"Erreur Stat: {str(e)[:50]}"}
 
 @app.get("/api/council/expert")
 async def get_council_expert():

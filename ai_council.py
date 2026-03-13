@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import time
+import re
 from datetime import datetime, timezone
 import google.generativeai as genai
 from persistence import get_cache, set_cache, load_db
@@ -12,62 +13,67 @@ load_dotenv()
 
 # Global WORKING_MODEL to avoid repeated 404s
 _WORKING_MODEL = None
-STABLE_MODELS = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-pro"]
+# Prioritize the most common names that work across regions
+STABLE_MODELS = ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
 
 async def call_persona_with_retry(prompt, data_context):
-    """Legacy SDK version with robust multi-model fallback."""
+    """Legacy SDK version with extreme resilience."""
     global _WORKING_MODEL
     key = os.getenv("GEMINI_API_KEY")
-    if not key: return "Erreur: Clé API manquante."
+    if not key: return "Erreur: Clé API manquante dans .env"
     
-    # Strip quotes if they were mistakenly kept in .env
     key = key.strip('"').strip("'")
     genai.configure(api_key=key)
     
+    # Always try the last working model first
     models_to_try = [_WORKING_MODEL] if _WORKING_MODEL else STABLE_MODELS
+    # If the working model fails, try them all
+    if _WORKING_MODEL and _WORKING_MODEL in STABLE_MODELS:
+        full_list = [_WORKING_MODEL] + [m for m in STABLE_MODELS if m != _WORKING_MODEL]
+    else:
+        full_list = STABLE_MODELS
+
+    last_error = "Aucun modèle Gemini n'est accessible avec votre clé."
     
-    last_error = "Aucun modèle n'a répondu."
-    for model_name in models_to_try:
+    for model_name in full_list:
         if not model_name: continue
         try:
+            print(f"DEBUG: Tentative avec {model_name}...")
             model = genai.GenerativeModel(model_name)
             full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
             
-            # Use to_thread to keep FastAPI async loop non-blocking
+            # Non-blocking call
             response = await asyncio.to_thread(model.generate_content, full_prompt)
-            if response.text:
+            if response and response.text:
                 _WORKING_MODEL = model_name
+                print(f"DEBUG: Succès avec {model_name}")
                 return response.text
+            else:
+                print(f"DEBUG: Réponse vide de {model_name}")
         except Exception as e:
-            err = str(e).lower()
-            last_error = str(e)
-            if "404" in err or "not found" in err:
-                continue # Try next model
-            if "429" in err or "quota" in err:
+            err_msg = str(e).lower()
+            print(f"DEBUG: Erreur avec {model_name} : {err_msg}")
+            last_error = f"Erreur avec {model_name} : {str(e)}"
+            if "quota" in err_msg or "429" in err_msg:
                 return "ERROR:QUOTA"
-            # If 400 or other, keep trying next models just in case
+            # 404 or 400 means model not found/unsupported, continue to next
             continue
             
-    return f"Erreur IA : {last_error[:100]}"
-
-def get_matches_hash(matches):
-    try:
-        m_ids = sorted([str(m.get('id', '')) for m in matches])
-        return "|".join(m_ids)
-    except:
-        return "fallback"
+    return f"Erreur IA : {last_error[:120]}"
 
 def extract_json(text):
-    import re
     if not text: return None
+    # Remove markdown blocks
     text = re.sub(r'```(?:json)?', '', text)
     text = re.sub(r'```', '', text)
+    # Find JSON boundaries
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1 and end > start:
         try:
             return json.loads(text[start:end+1])
-        except:
+        except Exception as e:
+            print(f"JSON Parse Error: {e}")
             pass
     return None
 
@@ -79,82 +85,69 @@ async def fetch_live_web_data(force_refresh=False):
     except Exception as e:
         print(f"Scraper error: {e}")
         matches = []
-        
     if matches: set_cache("match_cache_v20", matches)
     return matches
 
 def build_match_context(matches):
-    ctx = "Voici les matchs réels du jour :\n"
-    for m in matches[:15]: # Limit to top 15 for a good balance of speed/quality
+    ctx = "Matchs réels :\n"
+    for m in matches[:12]: # Optimal count for quality/speed
         odds = m.get('odds', {})
-        ctx += f"- {m.get('homeTeam')} vs {m.get('awayTeam')} | Sport: {m.get('sport')} | Comp: {m.get('competition')} | ID: {m.get('id')} | Cotes: {odds.get('1')}/{odds.get('N')}/{odds.get('2')}\n"
+        ctx += f"- {m.get('homeTeam')} vs {m.get('awayTeam')} | ID: {m.get('id')} | Cotes: {odds.get('1')}/{odds.get('N')}/{odds.get('2')}\n"
     return ctx
 
-SYSTEM_MASTER_COUNCIL = """Tu es une IA de pronostics sportifs de précision. Analyse les matchs fournis et retourne UN SEUL OBJET JSON pur.
-Structure attendue :
+SYSTEM_MASTER_COUNCIL = """Tu es une IA de pronostics. Retourne UN SEUL OBJET JSON pur.
+Structure :
 {
-  "statistician": "Analyse chiffrée courte...",
-  "expert": "Analyse tactique courte...",
-  "pessimist": "Mise en garde sur les pièges...",
-  "trend": "Analyse des cotes et du marché...",
-  "predictions": {
-    "ID_DU_MATCH": {"bet": "Pari suggéré (ex: 1, N, 2, Buteur X)", "confidence": 85, "reason": "Pourquoi ?"}
-  },
-  "tickets": {
-    "safe": {"total_odds": 2.10, "suggested_stake": 5, "selections": [{"match": "Nom", "bet": "X", "odds": 1.45}]},
-    "balanced": {"total_odds": 5.50, "suggested_stake": 2, "selections": [...]},
-    "risky": {"total_odds": 15.0, "suggested_stake": 1, "selections": [...]}
-  }
-}
-RÈGLE D'OR : Ne propose QUE des matchs présents dans la liste avec leur ID correct."""
+  "statistician": "...", "expert": "...", "pessimist": "...", "trend": "...",
+  "predictions": { "ID": {"bet": "...", "confidence": 85, "reason": "..."} },
+  "tickets": { "safe": {...}, "balanced": {...}, "risky": {...} }
+}"""
 
 async def run_full_analysis(matches, force_refresh=False):
-    if not matches: return {"error": "Aucun match à analyser."}
+    if not matches: return {"error": "Aucun match trouvé pour analyse."}
     
-    m_hash = get_matches_hash(matches)
-    cache_key = f"analysis_phase67_stable_v1_{m_hash}"
-    cached = get_cache(cache_key, ttl=3600)
+    m_hash = "m" + str(len(matches)) # Simple hash for cache
+    cache_key = f"analysis_v85_{m_hash}"
+    cached = get_cache(cache_key, ttl=1800)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
     res = await call_persona_with_retry(SYSTEM_MASTER_COUNCIL, context)
     
-    if "ERROR:QUOTA" in res: return {"error": "Quota Gemini épuisé. Réessayez demain."}
+    if "ERROR:QUOTA" in res: return {"error": "QUOTA_EPUISE"}
     if res.startswith("Erreur IA"): return {"error": res}
     
     data = extract_json(res)
     if data:
-        # Data validation to prevent frontend crashes
+        # Default structures to prevent frontend crashes
         if "tickets" not in data: data["tickets"] = {}
-        for cat in ["safe", "balanced", "risky"]:
-            if cat not in data["tickets"]: data["tickets"][cat] = {"total_odds": 0, "suggested_stake": 0, "selections": []}
-            
+        for k in ["safe", "balanced", "risky"]:
+            if k not in data["tickets"]: data["tickets"][k] = {"total_odds": 0, "selections": []}
         set_cache(cache_key, data)
         return data
         
-    return {"error": "Formatage IA corrompu. Relancez l'analyse."}
-
-async def run_bookmaker(matches):
-    return await run_full_analysis(matches)
+    return {"error": "L'IA a retourné un format invalide. Réessayez."}
 
 async def generate_daily_brief(matches):
-    if not matches: return "Pas de matchs aujourd'hui."
-    prompt = "Tu es le Directeur. Fais un briefing très court (3 phrases) sur les opportunités du jour."
-    res = await call_persona_with_retry(prompt, build_match_context(matches[:6]))
+    if not matches: return "Aucun match pour le briefing."
+    prompt = "Fais un briefing Directeur très court (3 phrases) des meilleures opportunités."
+    res = await call_persona_with_retry(prompt, build_match_context(matches[:5]))
     return res
 
-# Legacy wrappers for main.py compatibility
+# Compatibility wrappers
 async def run_statistician(matches):
-    res = await run_full_analysis(matches)
-    return res.get("statistician", "Analyse indisponible.")
+    data = await run_full_analysis(matches)
+    return data.get("statistician", "Erreur d'analyse.") if isinstance(data, dict) else str(data)
 async def run_expert(matches):
-    res = await run_full_analysis(matches)
-    return res.get("expert", "Analyse indisponible.")
+    data = await run_full_analysis(matches)
+    return data.get("expert", "Erreur d'analyse.") if isinstance(data, dict) else str(data)
 async def run_pessimist(matches):
-    res = await run_full_analysis(matches)
-    return res.get("pessimist", "Analyse indisponible.")
+    data = await run_full_analysis(matches)
+    return data.get("pessimist", "Erreur d'analyse.") if isinstance(data, dict) else str(data)
 async def run_trend(matches):
-    res = await run_full_analysis(matches)
-    return res.get("trend", "Analyse indisponible.")
+    data = await run_full_analysis(matches)
+    return data.get("trend", "Erreur d'analyse.") if isinstance(data, dict) else str(data)
 async def run_ai_council(matches):
-    return await run_bookmaker(matches)
+    return await run_full_analysis(matches)
+async def run_bookmaker(matches):
+    return await run_full_analysis(matches)

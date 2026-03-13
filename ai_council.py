@@ -114,67 +114,87 @@ def build_match_context(matches):
     return ctx
 
 async def run_full_analysis(matches, force_refresh=False):
-    """ULTIMATE COMPONENTIZATION: 5 concurrent micro-requests to guarantee sub-10s execution."""
+    """PHASE 111: Clean State Restart. Focused on stability and error visibility."""
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_component_v110_{m_hash}"
+    cache_key = f"analysis_clean_state_v111_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    # Define minimal, pinpoint prompts for each component
-    prompts = {
-        "statistician": "Es-tu le Statisticien ? Analyse mathématiquement ces matchs (value bets). Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
-        "expert": "Es-tu l'Expert Terrain ? Analyse les dynamiques et enjeux. Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
-        "pessimist": "Es-tu l'Avocat du Diable ? Quels sont les pièges évidents ? Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
-        "trend": "Es-tu le Réseauteur ? Quelle est la tendance des parieurs pros ? Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
-        "tickets": """Tu es le Banquier. Génère UNIQUEMENT ce JSON EXACT, sans aucun autre texte autour :
-        {
-          "tickets": { 
-              "safe": {"total_odds": 1.5, "suggested_stake": 5.0, "selections": [{"match": "A vs B", "bet": "1", "odds": 1.5, "reason": "Sûr"}]}, 
-              "balanced": {"total_odds": 4.5, "suggested_stake": 3.0, "selections": []}, 
-              "risky": {"total_odds": 15.0, "suggested_stake": 1.0, "selections": []} 
-          }
-        }"""
-    }
-
-    print("AI COUNCIL: Firing 5 concurrent micro-requests...")
+    prompt = """Tu es le SYSTÈME ANALYTIQUE SUPRÊME.
+    Génère une analyse experte courte et les 3 Meilleurs Tickets (Safe, Équilibré, Osé).
     
-    # Fire all requests concurrently with a strict 15s timeout
-    async def fetch_component(key, prompt):
-        res = await call_gemini_safe(prompt, context, timeout=15)
-        # Protect against failures
-        if res in ["TIMEOUT", "ERROR:QUOTA", "ERROR:404", ""]:
-            return key, f"Indisponible ({res})"
-        return key, res
+    STRUCTURE EXACTE À RENVOYER EN JSON (RIEN D'AUTRE) :
+    {
+      "statistician": "2 phrases : Analyse math",
+      "expert": "2 phrases : Analyse terrain",
+      "pessimist": "2 phrases : Les pièges",
+      "trend": "2 phrases : La tendance",
+      "predictions": {
+          "id_match_1": {"bet": "1", "confidence": 80, "reason": "Motif court"}
+      },
+      "tickets": { 
+          "safe": {"total_odds": 1.5, "suggested_stake": 5.0, "selections": [{"match": "Equipe A vs B", "bet": "1", "odds": 1.5, "reason": "Explication"}]},
+          "balanced": {"total_odds": 4.5, "suggested_stake": 3.0, "selections": []},
+          "risky": {"total_odds": 15.0, "suggested_stake": 1.0, "selections": []}
+      }
+    }"""
 
-    tasks = [fetch_component(k, p) for k, p in prompts.items()]
-    results = dict(await asyncio.gather(*tasks))
-
-    # Check for catastrophic failure (Tickets failed)
-    if not results.get("tickets") or "{" not in results["tickets"]:
-        return {"error": "L'IA n'a pas pu concevoir les tickets. Le serveur Google est surchargé. Réessayez."}
-
-    # Extract JSON safely from the TICKETS response
-    tickets_data = extract_json(results["tickets"]) or {"tickets": {
-        "safe": {"total_odds": 0, "suggested_stake": 0, "selections": []},
-        "balanced": {"total_odds": 0, "suggested_stake": 0, "selections": []},
-        "risky": {"total_odds": 0, "suggested_stake": 0, "selections": []}
-    }}
-
-    final_data = {
-        "statistician": results.get("statistician", "Non disponible."),
-        "expert": results.get("expert", "Non disponible."),
-        "pessimist": results.get("pessimist", "Non disponible."),
-        "trend": results.get("trend", "Non disponible."),
-        "predictions": {}, # Deprecated for speed
-        "tickets": tickets_data.get("tickets", {})
-    }
+    print("AI COUNCIL (Clean State): Starting full analysis call...")
     
-    set_cache(cache_key, final_data)
-    return final_data
+    try:
+        # 1. Discover model fast
+        model_name = await discover_best_model()
+        if not model_name:
+            return {"error": "ERREUR CRITIQUE: Impossible de trouver un modèle IA autorisé avec cette clé."}
+        
+        # 2. Call model with a safe 25s timeout
+        model = genai.GenerativeModel(model_name)
+        full_prompt = f"{prompt}\n\nDATA:\n{context}"
+        
+        response = await asyncio.wait_for(
+            asyncio.to_thread(model.generate_content, full_prompt),
+            timeout=25
+        )
+        
+        if not response or not response.text:
+            return {"error": "ERREUR: L'IA a répondu avec un message vide."}
+            
+        res_text = response.text
+        
+    except asyncio.TimeoutError:
+        return {"error": "TIMEOUT: L'IA a mis plus de 25s. Le serveur a coupé la connexion. Réessayez."}
+    except Exception as e:
+        err_str = str(e).lower()
+        if "quota" in err_str or "429" in err_str: return {"error": "QUOTA: Votre limite Google API est atteinte pour aujourd'hui."}
+        if "404" in err_str: return {"error": "ERREUR 404: Modèle introuvable. Vérifiez votre clé sur Render."}
+        return {"error": f"ERREUR API: {str(e)[:100]}"}
+
+    # 3. Aggressive JSON Extraction
+    print(f"AI COUNCIL: Parsing response... ({len(res_text)} chars)")
+    data = extract_json(res_text)
+    
+    if not data or "tickets" not in data:
+        # If extraction completely fails, show the raw text in the error so the user and developer can see what the AI actually did
+        raw_preview = res_text[:150].replace('\n', ' ')
+        return {"error": f"ERREUR JSON: L'IA n'a pas respecté le format. Extrait: '{raw_preview}...'"}
+
+    # 4. Data integrity guarantee
+    if "predictions" not in data: data["predictions"] = {}
+    if "statistician" not in data: data["statistician"] = "Analyse non générée."
+    if "expert" not in data: data["expert"] = "Analyse non générée."
+    if "pessimist" not in data: data["pessimist"] = "Analyse non générée."
+    if "trend" not in data: data["trend"] = "Analyse non générée."
+    
+    for strategy in ["safe", "balanced", "risky"]:
+        if strategy not in data["tickets"]: 
+            data["tickets"][strategy] = {"total_odds": 0, "suggested_stake": 0, "selections": []}
+            
+    set_cache(cache_key, data)
+    return data
 
 
 async def generate_daily_brief(matches):

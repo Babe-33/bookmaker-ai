@@ -27,8 +27,10 @@ async def discover_best_model():
         key = os.getenv("GEMINI_API_KEY")
         if not key: return None
         
-        # Rigorously clean the API key (fixes Render/dotenv quote issues)
-        clean_key = str(key).strip().strip("'").strip('"').strip()
+        # Rigorous cleaning: Remove quotes AND any non-printable/hidden characters
+        clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
+        clean_key = clean_key.strip()
+        
         genai.configure(api_key=clean_key)
 
         print("AI COUNCIL: Starting Advanced Discovery...")

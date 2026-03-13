@@ -22,7 +22,10 @@ async def get_model_name():
     
     key = os.getenv("GEMINI_API_KEY")
     if not key: return None
-    genai.configure(api_key=key.strip('"').strip("'"))
+    
+    # Rigorously clean the API key (fixes Render/dotenv quote issues)
+    clean_key = str(key).strip().strip("'").strip('"').strip()
+    genai.configure(api_key=clean_key)
     
     # Quick test the most likely one
     for name in STABLE_NAMES:
@@ -87,37 +90,43 @@ async def run_full_analysis(matches, force_refresh=False):
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_ticket_focus_v90_{m_hash}"
+    cache_key = f"analysis_ticket_focus_v93_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    prompt = """Tu es le Conseil des Intelligences. Ta mission est d'optimiser le temps et la pertinence:
-    1. Analyse les rencontres pour trouver les MEILLEURS matchs et construire tes 3 tickets (safe, balanced, risky).
-    2. Pour ces tickets, donne des analyses expertes dans les sections statistician, expert, pessimist, trend.
-    3. Pour TOUS les autres matchs, fournis JUSTE le pronostic direct dans 'predictions', SANS explication détaillée (raison très courte).
+    prompt = """Tu es une machine API. Tu dois OBLIGATOIREMENT renvoyer un objet JSON valide et complet. AUCUN texte avant, AUCUN texte après.
+    1. Trouve les MEILLEURS matchs et construis 3 tickets.
+    2. Pour ces tickets, donne des avis dans les sections statistician, expert, pessimist, trend.
+    3. Pour TOUS les autres matchs, fournis uniquement le pronostic direct dans 'predictions'.
     
-    Retourne UNIQUEMENT un JSON pur :
+    Copie EXCATEMENT cette structure et remplis-la :
     {
-      "statistician": "Ton avis sur les tickets choisis (super court)",
-      "expert": "Ton avis sur les tickets choisis (super court)",
-      "pessimist": "Les pièges des tickets choisis (super court)",
-      "trend": "La tendance globale (super court)",
-      "predictions": { "ID": {"bet": "Pari suggéré (ex: 1, N, 2)", "confidence": 80, "reason": "1 mot"} },
-      "tickets": { "safe": {...}, "balanced": {...}, "risky": {...} }
+      "statistician": "phrase courte",
+      "expert": "phrase courte",
+      "pessimist": "phrase courte",
+      "trend": "phrase courte",
+      "predictions": { "123": {"bet": "1", "confidence": 80, "reason": "mot"} },
+      "tickets": { 
+          "safe": {"total_odds": 2.5, "selections": [{"match_id": "123", "bet": "1", "odds": 1.5, "reason": "mot"}]}, 
+          "balanced": {"total_odds": 5.0, "selections": []}, 
+          "risky": {"total_odds": 12.0, "selections": []} 
+      }
     }"""
 
     res = await call_gemini_safe(prompt, context, timeout=40)
-    if res == "TIMEOUT": return {"error": "L'IA est trop lente sur ce serveur. Réessayez."}
+    if res == "TIMEOUT": return {"error": "L'IA a mis trop de temps à répondre (Timeout)."}
 
-    data = extract_json(res) or {}
+    data = extract_json(res)
     
-    if "predictions" in data:
+    if data and "predictions" in data:
         set_cache(cache_key, data)
         return data
-    
-    return {"error": "IA a renvoyé une réponse incomplète."}
+        
+    # Diagnostique en cas d'erreur de parsing JSON
+    print(f"JSON FAULT. Raw output was: {res[:200]}...")
+    return {"error": "L'IA a généré un texte invalide. Veuillez réessayer."}
 
 async def generate_daily_brief(matches):
     if not matches: return "Aucun match."

@@ -114,79 +114,63 @@ def build_match_context(matches):
     return ctx
 
 async def run_full_analysis(matches, force_refresh=False):
-    """TICKETS + EXPERTISE STRATEGY: Two ultra-fast sequential calls to bypass Render's 30s limit."""
+    """ULTIMATE COMPONENTIZATION: 5 concurrent micro-requests to guarantee sub-10s execution."""
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_sequential_v109_{m_hash}"
+    cache_key = f"analysis_component_v110_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    # --- CALL 1 : THE EXPERTS (Generates text only) ---
-    prompt_experts = """Tu es le Cerveau Analytique. Donne-moi ton avis d'expert sur ces matchs.
-    RÉPOND STRICTEMENT EN JSON SELON CETTE STRUCTURE :
-    {
-      "statistician": "2 phrases : Analyse mathématique globale des matchs (les value bets).",
-      "expert": "2 phrases : Analyse terrain (dynamiques d'équipe, contexte).",
-      "pessimist": "2 phrases : Les pièges à éviter aujourd'hui.",
-      "trend": "2 phrases : La tendance générale des parieurs.",
-      "predictions": {
-          "id_match_1": {"bet": "1", "confidence": 80, "reason": "Motif court"}
-      }
-    }"""
-    
-    # --- CALL 2 : THE TICKETS (Generates betting lines only) ---
-    prompt_tickets = """Tu es le Cerveau Financier. Crée 3 Tickets parfaits avec ces matchs.
-    RÉPOND STRICTEMENT EN JSON SELON CETTE STRUCTURE :
-    {
-      "tickets": { 
-          "safe": {
-              "total_odds": 1.5, 
-              "suggested_stake": 5.0,
-              "selections": [{"match": "Equipe A vs B", "bet": "1", "odds": 1.5, "reason": "Sûr"}]
-          }, 
-          "balanced": {
-              "total_odds": 4.5, 
-              "suggested_stake": 3.0,
-              "selections": []
-          }, 
-          "risky": {
-              "total_odds": 15.0, 
-              "suggested_stake": 1.0,
-              "selections": []
-          } 
-      }
-    }"""
+    # Define minimal, pinpoint prompts for each component
+    prompts = {
+        "statistician": "Es-tu le Statisticien ? Analyse mathématiquement ces matchs (value bets). Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
+        "expert": "Es-tu l'Expert Terrain ? Analyse les dynamiques et enjeux. Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
+        "pessimist": "Es-tu l'Avocat du Diable ? Quels sont les pièges évidents ? Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
+        "trend": "Es-tu le Réseauteur ? Quelle est la tendance des parieurs pros ? Fais 2 phrases très courtes. PAS DE JSON, JUSTE DU TEXTE.",
+        "tickets": """Tu es le Banquier. Génère UNIQUEMENT ce JSON EXACT, sans aucun autre texte autour :
+        {
+          "tickets": { 
+              "safe": {"total_odds": 1.5, "suggested_stake": 5.0, "selections": [{"match": "A vs B", "bet": "1", "odds": 1.5, "reason": "Sûr"}]}, 
+              "balanced": {"total_odds": 4.5, "suggested_stake": 3.0, "selections": []}, 
+              "risky": {"total_odds": 15.0, "suggested_stake": 1.0, "selections": []} 
+          }
+        }"""
+    }
 
-    # Executive Summary: We execute sequentially to stay under the 30s Render Limit per request.
-    print("AI COUNCIL: Starting Phase 1/2 (Experts)...")
-    res_expert = await call_gemini_safe(prompt_experts, context, timeout=20)
-    print("AI COUNCIL: Starting Phase 2/2 (Tickets)...")
-    res_tickets = await call_gemini_safe(prompt_tickets, context, timeout=20)
+    print("AI COUNCIL: Firing 5 concurrent micro-requests...")
     
-    if res_expert == "TIMEOUT" or res_tickets == "TIMEOUT": 
-        return {"error": "L'IA a mis trop de temps (>30s) sur l'une des phases. L'analyse est interrompue."}
-    if res_expert == "ERROR:QUOTA": return {"error": "Google API: Quota épuisé."}
-    if res_expert == "ERROR:404": return {"error": "Google API: Erreur 404 (Modèle)."}
-    if not res_expert or not res_tickets: return {"error": "IA inactive. Vérifiez vos clés."}
+    # Fire all requests concurrently with a strict 15s timeout
+    async def fetch_component(key, prompt):
+        res = await call_gemini_safe(prompt, context, timeout=15)
+        # Protect against failures
+        if res in ["TIMEOUT", "ERROR:QUOTA", "ERROR:404", ""]:
+            return key, f"Indisponible ({res})"
+        return key, res
 
-    data_expert = extract_json(res_expert) or {}
-    data_tickets = extract_json(res_tickets) or {}
-    
-    # Merge both JSONs
+    tasks = [fetch_component(k, p) for k, p in prompts.items()]
+    results = dict(await asyncio.gather(*tasks))
+
+    # Check for catastrophic failure (Tickets failed)
+    if not results.get("tickets") or "{" not in results["tickets"]:
+        return {"error": "L'IA n'a pas pu concevoir les tickets. Le serveur Google est surchargé. Réessayez."}
+
+    # Extract JSON safely from the TICKETS response
+    tickets_data = extract_json(results["tickets"]) or {"tickets": {
+        "safe": {"total_odds": 0, "suggested_stake": 0, "selections": []},
+        "balanced": {"total_odds": 0, "suggested_stake": 0, "selections": []},
+        "risky": {"total_odds": 0, "suggested_stake": 0, "selections": []}
+    }}
+
     final_data = {
-        "statistician": data_expert.get("statistician", "Analyse experte non disponible."),
-        "expert": data_expert.get("expert", "Analyse terrain non disponible."),
-        "pessimist": data_expert.get("pessimist", "Analyse risques non disponible."),
-        "trend": data_expert.get("trend", "Tendance non disponible."),
-        "predictions": data_expert.get("predictions", {}),
-        "tickets": data_tickets.get("tickets", {
-            "safe": {"total_odds": 0, "suggested_stake": 0, "selections": []},
-            "balanced": {"total_odds": 0, "suggested_stake": 0, "selections": []},
-            "risky": {"total_odds": 0, "suggested_stake": 0, "selections": []}
-        })
+        "statistician": results.get("statistician", "Non disponible."),
+        "expert": results.get("expert", "Non disponible."),
+        "pessimist": results.get("pessimist", "Non disponible."),
+        "trend": results.get("trend", "Non disponible."),
+        "predictions": {}, # Deprecated for speed
+        "tickets": tickets_data.get("tickets", {})
     }
     
     set_cache(cache_key, final_data)

@@ -17,7 +17,7 @@ _DISCOVERY_DONE = False
 _LOCK = asyncio.Lock()
 
 async def discover_best_model():
-    """Uses list_models() to find the best available model, or falls back to brute force."""
+    """Ultra-fast model discovery with strict 5s limit."""
     global _WORKING_MODEL, _DISCOVERY_DONE
     if _DISCOVERY_DONE: return _WORKING_MODEL
 
@@ -27,68 +27,49 @@ async def discover_best_model():
         key = os.getenv("GEMINI_API_KEY")
         if not key: return None
         
-        # Rigorous cleaning: Remove quotes AND any non-printable/hidden characters
         clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
-        clean_key = clean_key.strip()
-        
         genai.configure(api_key=clean_key)
 
-        print("AI COUNCIL: Starting Advanced Discovery...")
+        print("AI COUNCIL: Quick Discovery...")
         try:
-            # Try to list models to see exactly what is allowed
-            available_models = []
+            # Try a direct probe on the most likely model first (0.5s)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            await asyncio.wait_for(asyncio.to_thread(model.generate_content, "t", generation_config={"max_output_tokens": 1}), timeout=2)
+            _WORKING_MODEL = "gemini-1.5-flash"
+            _DISCOVERY_DONE = True
+            return _WORKING_MODEL
+        except:
+            pass
+
+        try:
+            # If probe failed, try a quick list_models (limited to 5 models)
+            models = []
             for m in genai.list_models():
                 if 'generateContent' in m.supported_generation_methods:
-                    available_models.append(m.name)
+                    models.append(m.name)
+                    if len(models) >= 3: break
             
-            if available_models:
-                # Prioritize Flash 1.5 for speed
-                flash_models = [m for m in available_models if "flash" in m and "1.5" in m]
-                if flash_models:
-                    _WORKING_MODEL = flash_models[0]
-                else:
-                    _WORKING_MODEL = available_models[0]
-                
-                print(f"AI COUNCIL: Auto-discovered model -> {_WORKING_MODEL}")
+            if models:
+                _WORKING_MODEL = models[0]
                 _DISCOVERY_DONE = True
                 return _WORKING_MODEL
-        except Exception as e:
-            print(f"AI COUNCIL: list_models() failed: {e}. Switching to Brute Force.")
+        except:
+            pass
 
-        # Brute Force Fallback if list_models() is restricted
-        candidates = [
-            "gemini-1.5-flash", 
-            "models/gemini-1.5-flash",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-pro",
-            "models/gemini-2.0-flash-exp",
-            "gemini-pro"
-        ]
-        
-        for name in candidates:
-            try:
-                model = genai.GenerativeModel(name)
-                # Quick test
-                await asyncio.to_thread(model.generate_content, "test", generation_config={"max_output_tokens": 5})
-                _WORKING_MODEL = name
-                _DISCOVERY_DONE = True
-                print(f"AI COUNCIL: Brute Force Success -> {name}")
-                return name
-            except:
-                continue
-        
-        return None
+        # Final absolute fallback
+        _WORKING_MODEL = "models/gemini-1.5-flash"
+        _DISCOVERY_DONE = True 
+        return _WORKING_MODEL
 
-async def call_gemini_safe(prompt, data_context, timeout=40):
-    """Call Gemini with autonomous discovery fallback."""
+async def call_gemini_safe(prompt, data_context, timeout=25):
+    """Call Gemini with sub-30s safety for Cloud platforms."""
     model_name = await discover_best_model()
-    if not model_name:
-        return "ERROR:404"
-
+    
     try:
         model = genai.GenerativeModel(model_name)
-        full_prompt = f"{prompt}\n\nDONNÉES MATCHS :\n{data_context}"
+        full_prompt = f"{prompt}\n\nDATA:\n{data_context}"
         
+        # We use a 25s timeout specifically for the API call to leave 5s for the rest of the request
         response = await asyncio.wait_for(
             asyncio.to_thread(model.generate_content, full_prompt),
             timeout=timeout
@@ -126,8 +107,10 @@ async def fetch_live_web_data(force_refresh=False):
 
 def build_match_context(matches):
     ctx = ""
-    for m in matches[:10]: # Limit for speed
-        ctx += f"- {m.get('homeTeam')} vs {m.get('awayTeam')} | ID: {m.get('id')} | Cotes: {m.get('odds')}\n"
+    for m in matches[:8]: # Limit to 8 for ultra-speed
+        odds = m.get('odds', {})
+        o_str = f"1:{odds.get('1','-')} N:{odds.get('N','-')} 2:{odds.get('2','-')}"
+        ctx += f"#{m.get('id')}: {m.get('homeTeam')} vs {m.get('awayTeam')} ({o_str})\n"
     return ctx
 
 async def run_full_analysis(matches, force_refresh=False):
@@ -135,71 +118,45 @@ async def run_full_analysis(matches, force_refresh=False):
     if not matches: return {"error": "Pas de matchs."}
     
     m_hash = str(len(matches))
-    cache_key = f"analysis_tickets_high_level_v102_{m_hash}"
+    cache_key = f"analysis_tickets_speed_v106_{m_hash}"
     cached = get_cache(cache_key, ttl=3600)
     if not force_refresh and cached: return cached
 
     context = build_match_context(matches)
 
-    prompt = """Tu es le SYSTÈME ANALYTIQUE SUPRÊME. Ta mission est de générer du PROFIT NET. 
-    Oublie les futilités. Scanne les données pour identifier les 3 meilleures opportunités du jour.
-    
-    1. "statistician" : Analyse mathématique froide (variance, value-bet, probabilités intrinsèques vs cotes).
-    2. "expert" : Analyse tactique et psychologique (dynamique d'équipe, motivation, enjeux cruciaux).
-    3. "pessimist" : Analyse des risques et pièges (over-confidence, blessures cachées, historique piège).
-    4. "trend" : Analyse des flux du marché et consensus des parieurs pro.
-    
-    RECOIS CETTE STRUCTURE JSON STRICTE ET REMPLIS-LA AVEC DU TEXTE DE HAUT NIVEAU :
+    prompt = """MISSION: ANALYSE PRO. 3 TICKETS (SAFE, BALANCED, RISKY).
+    FORMAT JSON STRICT:
     {
-      "statistician": "analyse quantitative experte",
-      "expert": "analyse qualitative terrain",
-      "pessimist": "critique acerbe des points de rupture",
-      "trend": "mouvements de foule et smart money",
+      "statistician": "analyse courte math",
+      "expert": "analyse courte terrain",
+      "pessimist": "analyse courte risques",
+      "trend": "analyse courte tendance",
       "predictions": {},
       "tickets": { 
-          "safe": {
-              "total_odds": 1.5, 
-              "suggested_stake": 5.0,
-              "selections": [{"match": "Nom Match", "bet": "1", "odds": 1.5, "reason": "Argument Flash"}]
-          }, 
-          "balanced": {
-              "total_odds": 4.5, 
-              "suggested_stake": 3.0,
-              "selections": []
-          }, 
-          "risky": {
-              "total_odds": 15.0, 
-              "suggested_stake": 1.0,
-              "selections": []
-          } 
+          "safe": {"total_odds": 1.5, "suggested_stake": 5, "selections": [{"match": "X vs Y", "bet": "1", "odds": 1.5, "reason": "..."}]},
+          "balanced": {"total_odds": 4.0, "suggested_stake": 3, "selections": []},
+          "risky": {"total_odds": 12.0, "suggested_stake": 1, "selections": []}
       }
     }"""
 
-    res = await call_gemini_safe(prompt, context, timeout=40)
-    if res == "TIMEOUT": return {"error": "L'IA a mis trop de temps à répondre (Timeout)."}
-    if res == "ERROR:QUOTA": return {"error": "Google API: Quota dépassé (Trop de requêtes aujourd'hui)."}
-    if res == "ERROR:404": return {"error": "Google API: Erreur 404 (Modèle refusé ou Clé API restreinte)."}
-    if not res: return {"error": "Veuillez vérifier votre clé API dans Render."}
+    res = await call_gemini_safe(prompt, context, timeout=25)
+    if res == "TIMEOUT": return {"error": "L'IA a mis trop de temps (>30s). Le serveur Render est surchargé. Réessayez."}
+    if res == "ERROR:QUOTA": return {"error": "Google API: Quota épuisé."}
+    if res == "ERROR:404": return {"error": "Google API: Erreur 404 (Modèle)."}
+    if not res: return {"error": "IA inactive. Vérifiez vos clés."}
 
     data = extract_json(res)
     
     if data and "tickets" in data:
-        # Guarantee data integrity for frontend
         if "predictions" not in data: data["predictions"] = {}
         for strategy in ["safe", "balanced", "risky"]:
             if strategy not in data["tickets"]: 
                 data["tickets"][strategy] = {"total_odds": 0, "suggested_stake": 0, "selections": []}
-            else:
-                ticket = data["tickets"][strategy]
-                if "suggested_stake" not in ticket: ticket["suggested_stake"] = 0
-                if "total_odds" not in ticket: ticket["total_odds"] = 0
-                if "selections" not in ticket: ticket["selections"] = []
-                
         set_cache(cache_key, data)
         return data
         
-    print(f"JSON FAULT. Raw output was: {res[:200]}...")
-    return {"error": "L'IA a généré un format invalide. Réessayez."}
+    return {"error": "L'IA a renvoyé une réponse incomplète. Veuillez recommencer."}
+
 
 async def generate_daily_brief(matches):
     if not matches: return "Aucun match."

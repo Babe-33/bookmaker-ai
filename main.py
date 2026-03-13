@@ -184,7 +184,10 @@ async def get_council_all():
         result = await run_bookmaker(current_matches_cache)
         return result
     except Exception as e:
+        import traceback
         print(f"Full analysis error: {e}")
+        traceback.print_exc()
+        return {"error": f"Erreur critique backend: {str(e)[:100]}"}
         return {"error": f"Erreur critique lors de l'analyse: {str(e)[:100]}"}
 
 # Serve the frontend statically

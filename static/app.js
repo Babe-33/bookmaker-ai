@@ -403,45 +403,46 @@ document.addEventListener('DOMContentLoaded', () => {
         runBtn.disabled = true;
         runBtn.innerText = '🧠 Analyse en cours...';
         
-        // Clear previous and show loading for each expert
+        // Reset responses
         statResponse.innerHTML = '<span class="loading-mini">⏳ Le Statisticien analyse...</span>';
         expertResponse.innerHTML = '<span class="loading-mini">⏳ L\'Expert Terrain analyse...</span>';
         pessimistResponse.innerHTML = '<span class="loading-mini">⏳ L\'Avocat du Diable analyse...</span>';
         trendResponse.innerHTML = '<span class="loading-mini">⏳ Le Réseauteur analyse...</span>';
         chatDialogue.innerHTML = '';
         
-        try {
-            const response = await fetch('/api/council/full');
-            const data = await response.json();
-            
-            if (data.error) {
-                const errMsg = data.error.includes("QUOTA") ? "Quota Gemini épuisé. Réessayez demain." : data.error;
-                throw new Error(errMsg);
+        // Parallel Fetch Strategy (Phase 112)
+        const fetchExpert = async (id, element) => {
+            try {
+                const response = await fetch(`/api/council/${id}`);
+                const data = await response.json();
+                element.innerHTML = formatMarkdown(data.text || "Indisponible.");
+            } catch (err) {
+                element.innerHTML = `<span style="color: #ef4444;">❌ Erreur ${id}</span>`;
             }
+        };
 
-            statResponse.innerHTML = formatMarkdown(data.statistician || "Non disponible.");
-            expertResponse.innerHTML = formatMarkdown(data.expert || "Non disponible.");
-            pessimistResponse.innerHTML = formatMarkdown(data.pessimist || "Non disponible.");
-            trendResponse.innerHTML = formatMarkdown(data.trend || "Non disponible.");
-
-            if (data.predictions) {
-                aiPredictions = data.predictions;
-                renderMatches(currentMatches);
+        const fetchTickets = async () => {
+            try {
+                const response = await fetch('/api/council/tickets');
+                const data = await response.json();
+                if (data.tickets) renderTripleTickets(data.tickets);
+                if (data.error) throw new Error(data.error);
+            } catch (err) {
+                statResponse.innerHTML += `<div style="color:#ef4444">Tickets: ${err.message}</div>`;
             }
+        };
 
-            if (data.tickets) renderTripleTickets(data.tickets);
-            runBtn.innerText = '✅ Analyses Complétées';
-            runBtn.disabled = false;
-        } catch (error) {
-            runBtn.innerText = '🔄 Réessayer';
-            runBtn.disabled = false;
-            const errHtml = `<div style="color: #ef4444; padding: 1rem; border: 1px solid #ef4444; border-radius: 8px; background: rgba(239, 68, 68, 0.1);">❌ Erreur: ${error.message}</div>`;
-            statResponse.innerHTML = errHtml;
-            expertResponse.innerHTML = errHtml;
-            pessimistResponse.innerHTML = errHtml;
-            trendResponse.innerHTML = errHtml;
-            bookieDebate.innerHTML = errHtml;
-        }
+        // Fire all together!
+        await Promise.all([
+            fetchExpert('stat', statResponse),
+            fetchExpert('field', expertResponse),
+            fetchExpert('pessimist', pessimistResponse),
+            fetchExpert('trend', trendResponse),
+            fetchTickets()
+        ]);
+
+        runBtn.innerText = '✅ Analyses Complétées';
+        runBtn.disabled = false;
     });
 
     // Bankroll Config

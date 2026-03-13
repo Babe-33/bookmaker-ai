@@ -115,7 +115,7 @@ async def set_bet_result(data: BetResultRequest):
 async def get_matches(force_refresh: bool = False):
     global current_matches_cache
     if not current_matches_cache or force_refresh:
-        new_matches = await scraper.fetch_live_web_data(force_refresh)
+        new_matches = await council.fetch_live_web_data(force_refresh)
         if new_matches or not current_matches_cache:
             current_matches_cache = new_matches
     return {"matches": current_matches_cache}
@@ -130,7 +130,7 @@ async def get_shared_matches():
     # Cache matches for 5 minutes during analysis session
     if not _LAST_MATCHES or (now - _LAST_SCRAPE_TIME) > 300:
         print("MAIN: Refreshing shared matches for analysis...")
-        _LAST_MATCHES = await scraper.fetch_live_web_data(force_refresh=True)
+        _LAST_MATCHES = await council.fetch_live_web_data(force_refresh=True)
         _LAST_SCRAPE_TIME = now
     return _LAST_MATCHES
 

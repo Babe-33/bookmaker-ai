@@ -10,6 +10,7 @@ import requests
 from datetime import datetime
 
 import time
+import asyncio
 import ai_council as council
 import real_matches_scraper as scraper
 from persistence import load_db, save_db, record_bet, update_bet_result, get_bankroll_stats
@@ -123,15 +124,25 @@ async def get_matches(force_refresh: bool = False):
 # --- Shared Analysis Global Cache ---
 _LAST_MATCHES = None
 _LAST_SCRAPE_TIME = 0
+_scrape_lock = asyncio.Lock()  # PREVENT PARALLEL SCRAPING EMBARRASSMENT
 
 async def get_shared_matches():
     global _LAST_MATCHES, _LAST_SCRAPE_TIME
+    
+    # Fast path: cache valid
     now = time.time()
-    # Cache matches for 5 minutes during analysis session
-    if not _LAST_MATCHES or (now - _LAST_SCRAPE_TIME) > 300:
-        print("MAIN: Refreshing shared matches for analysis...")
-        _LAST_MATCHES = await council.fetch_live_web_data(force_refresh=True)
-        _LAST_SCRAPE_TIME = now
+    if _LAST_MATCHES and (now - _LAST_SCRAPE_TIME) < 300:
+        return _LAST_MATCHES
+
+    # Protected path: only one request can refresh at a time
+    async with _scrape_lock:
+        # Double-check after acquiring lock
+        now = time.time()
+        if not _LAST_MATCHES or (now - _LAST_SCRAPE_TIME) > 300:
+            print("MAIN: Protected Refresh of shared matches...")
+            # We use force_refresh=False by default to favor the scraping logic's internal caches
+            _LAST_MATCHES = await council.fetch_live_web_data(force_refresh=False)
+            _LAST_SCRAPE_TIME = now
     return _LAST_MATCHES
 
 @app.get("/api/briefing")
@@ -178,12 +189,11 @@ async def get_council_tickets():
 
 @app.get("/api/council/full")
 async def get_council_all():
-    # Legacy support: we'll just return an error and advise using the new buttons if needed,
-    # OR we can keep it as a fallback. Let's keep it but make it very robust.
     try:
         matches = await get_shared_matches()
         if not matches: return {"error": "Aucun match disponible."}
-        return await council.run_full_analysis(matches, force_refresh=True)
+        # Use existing matches without forcing a slow scrape
+        return await council.run_full_analysis(matches, force_refresh=False)
     except Exception as e:
         import traceback
         print(f"Full analysis error: {e}")

@@ -100,8 +100,11 @@ async def fetch_live_web_data(force_refresh=False):
     cached = get_cache("match_cache_v20", ttl=21600)
     if not force_refresh and cached: return cached
     try:
-        matches = scrape_real_matches(force_refresh=force_refresh)
-    except: matches = []
+        # WRAP SYNCHRONOUS SCRAPING IN A THREAD TO PREVENT EVENT LOOP BLOCKING
+        matches = await asyncio.to_thread(scrape_real_matches, force_refresh=force_refresh)
+    except Exception as e:
+        print(f"SCRAPE ERROR: {e}")
+        matches = []
     if matches: set_cache("match_cache_v20", matches)
     return matches
 

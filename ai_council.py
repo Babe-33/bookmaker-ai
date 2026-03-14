@@ -17,49 +17,12 @@ _DISCOVERY_DONE = False
 _LOCK = asyncio.Lock()
 
 async def discover_best_model():
-    """Ultra-fast model discovery with strict 5s limit."""
-    global _WORKING_MODEL, _DISCOVERY_DONE
-    if _DISCOVERY_DONE: return _WORKING_MODEL
-
-    async with _LOCK:
-        if _DISCOVERY_DONE: return _WORKING_MODEL
-        
-        key = os.getenv("GEMINI_API_KEY")
-        if not key: return None
-        
+    """HARDCODED FOR RENDER FREE QUOTA SAFETY (Speed > Discovery)"""
+    key = os.getenv("GEMINI_API_KEY")
+    if key:
         clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
         genai.configure(api_key=clean_key)
-
-        print("AI COUNCIL: Quick Discovery...")
-        try:
-            # Try a direct probe on the most likely model first (0.5s)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            await asyncio.wait_for(asyncio.to_thread(model.generate_content, "t", generation_config={"max_output_tokens": 1}), timeout=2)
-            _WORKING_MODEL = "gemini-1.5-flash"
-            _DISCOVERY_DONE = True
-            return _WORKING_MODEL
-        except:
-            pass
-
-        try:
-            # If probe failed, try a quick list_models (limited to 5 models)
-            models = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    models.append(m.name)
-                    if len(models) >= 3: break
-            
-            if models:
-                _WORKING_MODEL = models[0]
-                _DISCOVERY_DONE = True
-                return _WORKING_MODEL
-        except:
-            pass
-
-        # Final absolute fallback
-        _WORKING_MODEL = "models/gemini-1.5-flash"
-        _DISCOVERY_DONE = True 
-        return _WORKING_MODEL
+    return "models/gemini-1.5-flash-latest"
 
 async def call_gemini_safe(prompt, data_context, timeout=25):
     """Call Gemini with sub-30s safety for Cloud platforms."""

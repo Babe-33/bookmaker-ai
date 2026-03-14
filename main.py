@@ -129,18 +129,17 @@ _scrape_lock = asyncio.Lock()  # PREVENT PARALLEL SCRAPING EMBARRASSMENT
 async def get_shared_matches():
     global _LAST_MATCHES, _LAST_SCRAPE_TIME
     
-    # Fast path: cache valid
+    # Fast path: cache valid (PHASE 115: 12-hour Hard Cache)
     now = time.time()
-    if _LAST_MATCHES and (now - _LAST_SCRAPE_TIME) < 300:
+    if _LAST_MATCHES and (now - _LAST_SCRAPE_TIME) < 43200:
         return _LAST_MATCHES
 
     # Protected path: only one request can refresh at a time
     async with _scrape_lock:
-        # Double-check after acquiring lock
         now = time.time()
-        if not _LAST_MATCHES or (now - _LAST_SCRAPE_TIME) > 300:
-            print("MAIN: Protected Refresh of shared matches...")
-            # We use force_refresh=False by default to favor the scraping logic's internal caches
+        if not _LAST_MATCHES or (now - _LAST_SCRAPE_TIME) > 43200:
+            print("MAIN: Emergency 12h Cache Refresh...")
+            # Use False to allow the scraper's internal persistences to work
             _LAST_MATCHES = await council.fetch_live_web_data(force_refresh=False)
             _LAST_SCRAPE_TIME = now
     return _LAST_MATCHES

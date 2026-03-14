@@ -433,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // Fire all together!
-        await Promise.all([
+        const analysisPromise = Promise.all([
             fetchExpert('stat', statResponse),
             fetchExpert('field', expertResponse),
             fetchExpert('pessimist', pessimistResponse),
@@ -441,7 +441,20 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchTickets()
         ]);
 
-        runBtn.innerText = '✅ Analyses Complétées';
+        // PHASE 115: WATCHDOG (Abort UI hang after 25s)
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), 25000));
+
+        const winner = await Promise.race([analysisPromise, timeoutPromise]);
+
+        if (winner === 'TIMEOUT') {
+            runBtn.innerText = '⚠️ Lent... Veuillez rafraîchir';
+            [statResponse, expertResponse, pessimistResponse, trendResponse].forEach(el => {
+                if (el.innerHTML.includes('⏳')) el.innerHTML = '<span style="color: #fbbf24;">⚠️ Délai dépassé (Render Free est lent).</span>';
+            });
+        } else {
+            runBtn.innerText = '✅ Analyses Complétées';
+        }
+
         runBtn.disabled = false;
     });
 

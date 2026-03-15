@@ -245,11 +245,15 @@ def scrape_real_matches(leagues=None, force_refresh=False):
             ("Football", "socc", "soccer", "uefa.champions", "Champions League"),
             ("Rugby", "rugb", "rugby", "fra.1", "Top 14"),
             ("Rugby", "rugb", "rugby", "six.nations", "Six Nations"),
+            ("Rugby", "rugb", "rugby", "eng.1", "English Premiership"),
+            ("Rugby", "rugb", "rugby", "r.6", "6 Nations Backup"),
+            ("Rugby", "rugb", "rugby", "180659", "6 Nations ID"),
             ("Rugby", "rugb", "rugby", "internationals", "Rugby Internationals"),
             ("Basket", "bask", "basketball", "nba", "NBA"),
             ("Hockey", "iceh", "hockey", "fra.1", "Ligue Magnus"),
             ("F1", "auto", "racing", "f1", "Formula 1"),
-            ("F1", "auto", "f1", "f1", "F1 Grand Prix")
+            ("F1", "auto", "f1", "f1", "F1 GP"),
+            ("F1", "auto", "racing", "2650", "F1 ID Backup")
         ]
     
     espn_matches = []

@@ -22,7 +22,7 @@ async def discover_best_model():
     if key:
         clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
         genai.configure(api_key=clean_key)
-    return "models/gemini-1.5-flash-latest"
+    return "models/gemini-1.5-flash"
 
 async def call_gemini_safe(prompt, data_context, timeout=25):
     """Call Gemini with sub-30s safety for Cloud platforms."""
@@ -41,10 +41,9 @@ async def call_gemini_safe(prompt, data_context, timeout=25):
     except asyncio.TimeoutError:
         return "TIMEOUT"
     except Exception as e:
-        err_str = str(e).lower()
-        if "quota" in err_str or "429" in err_str: return "ERROR:QUOTA"
-        if "404" in err_str: return "ERROR:404"
-        return ""
+        err_str = str(e)
+        # Surface exact error for Phase 121 diagnostics
+        return f"ERROR: {err_str}"
 
 def extract_json(text):
     if not text: return None

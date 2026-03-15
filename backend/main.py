@@ -167,6 +167,7 @@ async def health_ai():
             "status": "connected",
             "latency": f"{round(time.time() - start, 2)}s",
             "response": res,
+            "active_model": await council.discover_best_model(),
             "render_ip": requests.get("https://api.ipify.org").text
         }
     except Exception as e:

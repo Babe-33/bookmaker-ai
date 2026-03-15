@@ -17,12 +17,52 @@ _DISCOVERY_DONE = False
 _LOCK = asyncio.Lock()
 
 async def discover_best_model():
-    """HARDCODED FOR RENDER FREE QUOTA SAFETY (Speed > Discovery)"""
-    key = os.getenv("GEMINI_API_KEY")
-    if key:
-        clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
-        genai.configure(api_key=clean_key)
-    return "models/gemini-2.0-flash-001"
+    """PHASE 125: DYNAMIC FALLBACK
+    The server list showed available 2.5/2.0 models but rejected standard names.
+    We now try a list of candidates and lock onto the first one that speaks.
+    """
+    global _WORKING_MODEL, _DISCOVERY_DONE
+    if _DISCOVERY_DONE and _WORKING_MODEL:
+        return _WORKING_MODEL
+
+    async with _LOCK:
+        if _DISCOVERY_DONE: return _WORKING_MODEL
+        
+        # Priority list based on Render diagnostic report
+        candidates = [
+            "models/gemini-2.5-flash",        # Seen in list
+            "models/gemini-2.0-flash-lite-001",
+            "models/gemini-2.0-flash-lite",
+            "models/gemini-2.0-flash-001",
+            "models/gemini-1.5-flash"
+        ]
+        
+        # Configure API
+        key = os.getenv("GEMINI_API_KEY")
+        if key:
+            clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
+            genai.configure(api_key=clean_key)
+        
+        for model_name in candidates:
+            try:
+                # Test the model with a tiny request
+                m = genai.GenerativeModel(model_name)
+                # We use asyncio.to_thread because the SDK call is blocking
+                await asyncio.wait_for(
+                    asyncio.to_thread(m.generate_content, "Say 'OK'"),
+                    timeout=5
+                )
+                _WORKING_MODEL = model_name
+                _DISCOVERY_DONE = True
+                print(f"AI: Confirmed working model -> {model_name}")
+                return _WORKING_MODEL
+            except:
+                continue
+        
+        # Absolute fallback if all fail
+        _WORKING_MODEL = "models/gemini-2.0-flash-lite-001"
+        _DISCOVERY_DONE = True
+        return _WORKING_MODEL
 
 async def call_gemini_safe(prompt, data_context, timeout=25):
     """Call Gemini with sub-30s safety for Cloud platforms."""

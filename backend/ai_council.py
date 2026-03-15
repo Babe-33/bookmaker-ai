@@ -22,7 +22,7 @@ async def discover_best_model():
     if key:
         clean_key = "".join(char for char in str(key) if char.isalnum() or char in "_-")
         genai.configure(api_key=clean_key)
-    return "models/gemini-2.0-flash"
+    return "models/gemini-2.0-flash-001"
 
 async def call_gemini_safe(prompt, data_context, timeout=25):
     """Call Gemini with sub-30s safety for Cloud platforms."""

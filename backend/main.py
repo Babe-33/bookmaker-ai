@@ -146,18 +146,31 @@ async def get_shared_matches():
 
 @app.get("/api/health/ai")
 async def health_ai():
-    """Diagnostic: Tests Gemini connection directly."""
+    """Diagnostic: Tests Gemini connection and lists models on failure."""
     start = time.time()
     try:
+        # PHASE 122: Try without 'models/' prefix
         res = await council.call_gemini_safe("Dis 'OK'", "Test", timeout=10)
+        
+        if "ERROR" in str(res):
+            # If it fails, list available models to find the right name
+            import google.generativeai as genai
+            model_list = [m.name for m in genai.list_models()]
+            return {
+                "status": "partial_success",
+                "error_from_gemini": res,
+                "available_models": model_list[:10],
+                "render_ip": requests.get("https://api.ipify.org").text
+            }
+
         return {
-            "status": "connected" if res else "failed",
+            "status": "connected",
             "latency": f"{round(time.time() - start, 2)}s",
             "response": res,
             "render_ip": requests.get("https://api.ipify.org").text
         }
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "critical_error", "error": str(e)}
 
 @app.get("/api/admin/clear-cache")
 async def clear_cache():

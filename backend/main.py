@@ -221,15 +221,19 @@ async def get_council_all():
         traceback.print_exc()
         return {"error": f"Erreur critique: {str(e)[:50]}"}
 
-# Serve the frontend statically
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# --- Static Files & Frontend ---
+# PHASE 120: Absolute path resolution to fix Render 'Directory static does not exist' error
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 async def read_index():
-    index_path = os.path.join("static", "index.html")
+    index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return {"message": "Bookmaker AI API is running. Go to /docs for Swagger UI. Create frontend in static/."}
+    return {"message": "Interface indisponible. Vérifiez le dossier static/."}
 
 if __name__ == "__main__":
     import uvicorn

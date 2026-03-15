@@ -111,8 +111,8 @@ def get_the_odds_api_matches(api_key, force_refresh=False):
                         match_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
                         now = datetime.now(timezone.utc)
                         delta_hours = (match_date - now).total_seconds() / 3600
-                        # STRICT: Only 72h future and 12h past. Discard June 2026.
-                        if delta_hours > 72 or delta_hours < -12:
+                        # EXTENDED FOR PHASE 116: 7 days future coverage
+                        if delta_hours > 168 or delta_hours < -12:
                             continue 
                     except:
                         pass
@@ -233,42 +233,31 @@ def scrape_real_matches(leagues=None, force_refresh=False):
     4. Sorts chronologically.
     """
     
-    # --- PHASE 1: Fetch ESPN Depth (Today + 2 Days) ---
+    # --- PHASE 1: Fetch ESPN Depth (Today + 7 Days) ---
     if not leagues:
         leagues = [
             ("Football", "socc", "soccer", "fra.1", "Ligue 1"),
             ("Football", "socc", "soccer", "fra.2", "Ligue 2"),
             ("Football", "socc", "soccer", "eng.1", "Premier League"),
-            ("Football", "socc", "soccer", "eng.2", "Championship"),
             ("Football", "socc", "soccer", "esp.1", "LaLiga"),
             ("Football", "socc", "soccer", "ita.1", "Serie A"),
             ("Football", "socc", "soccer", "ger.1", "Bundesliga"),
-            ("Football", "socc", "soccer", "ned.1", "Eredivisie"),
-            ("Football", "socc", "soccer", "por.1", "Liga Portugal"),
-            ("Football", "socc", "soccer", "fra.cup", "Coupe de France"),
             ("Football", "socc", "soccer", "uefa.champions", "Champions League"),
-            ("Football", "socc", "soccer", "uefa.europa", "Europa League"),
-            ("Football", "socc", "soccer", "uefa.conference", "Conference League"),
-            ("Football", "socc", "soccer", "fifa.world", "Coupe du Monde"),
-            ("Football", "socc", "soccer", "uefa.euro", "Euro"),
             ("Rugby", "rugb", "rugby", "fra.1", "Top 14"),
-            ("Rugby", "rugb", "rugby", "fra.2", "Pro D2"),
             ("Rugby", "rugb", "rugby", "six.nations", "Six Nations"),
-            ("Rugby", "rugb", "rugby", "champions.cup", "Champions Cup"),
+            ("Rugby", "rugb", "rugby", "internationals", "Rugby Internationals"),
             ("Basket", "bask", "basketball", "nba", "NBA"),
-            ("Basket", "bask", "basketball", "euro", "Euroleague"),
             ("Hockey", "iceh", "hockey", "fra.1", "Ligue Magnus"),
-            ("F1", "auto", "racing", "f1", "Formula 1")
+            ("F1", "auto", "racing", "f1", "Formula 1"),
+            ("F1", "auto", "f1", "f1", "F1 Grand Prix")
         ]
     
     espn_matches = []
     headers = { 'User-Agent': 'Mozilla/5.0' }
     today = datetime.now(timezone.utc)
-    # Fetch 3 DAYS to ensure 11/03 (Tomorrow) is always there
+    # Fetch 7 DAYS for complete weekend coverage
     dates_to_fetch = [
-        today.strftime('%Y%m%d'),
-        (today + timedelta(days=1)).strftime('%Y%m%d'),
-        (today + timedelta(days=2)).strftime('%Y%m%d')
+        (today + timedelta(days=i)).strftime('%Y%m%d') for i in range(7)
     ]
     
     for sport_label, core_sport1, core_sport2, league_code, competition_name in leagues:

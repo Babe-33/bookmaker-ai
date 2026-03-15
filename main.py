@@ -144,6 +144,28 @@ async def get_shared_matches():
             _LAST_SCRAPE_TIME = now
     return _LAST_MATCHES
 
+@app.get("/api/health/ai")
+async def health_ai():
+    """Diagnostic: Tests Gemini connection directly."""
+    start = time.time()
+    try:
+        res = await council.call_gemini_safe("Dis 'OK'", "Test", timeout=10)
+        return {
+            "status": "connected" if res else "failed",
+            "latency": f"{round(time.time() - start, 2)}s",
+            "response": res,
+            "render_ip": requests.get("https://api.ipify.org").text
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/admin/clear-cache")
+async def clear_cache():
+    global _LAST_MATCHES, _LAST_SCRAPE_TIME
+    _LAST_MATCHES = None
+    _LAST_SCRAPE_TIME = 0
+    return {"message": "Cache réinitialisé."}
+
 @app.get("/api/briefing")
 async def get_daily_brief_endpoint():
     try:

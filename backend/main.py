@@ -98,6 +98,21 @@ async def handle_ticket_action(data: TicketAction):
 async def get_stats():
     return get_bankroll_stats()
 
+@app.get("/api/bankroll/stats")
+async def get_stats():
+    return get_bankroll_stats()
+
+@app.get("/api/bankroll")
+async def get_bankroll():
+    return load_db()
+
+@app.post("/api/bankroll/update")
+async def update_bankroll(data: BankrollUpdate):
+    db = load_db()
+    db["bankroll"] = {"balance": data.new_balance, "initial_balance": data.new_balance, "currency": "€"}
+    save_db(db)
+    return {"status": "success", "stats": get_bankroll_stats()}
+
 @app.post("/api/bet/play")
 async def play_bet(data: BetPlayRequest):
     bet_id, error = record_bet(data.type, data.selections, data.total_odds, data.stake)
@@ -144,83 +159,56 @@ async def get_shared_matches():
             _LAST_SCRAPE_TIME = now
     return _LAST_MATCHES
 
-@app.get("/api/health/ai")
-async def health_ai():
-    """Diagnostic: Tests Gemini connection and lists models on failure."""
-    start = time.time()
-    try:
-        # PHASE 122: Try without 'models/' prefix
-        res = await council.call_gemini_safe("Dis 'OK'", "Test", timeout=10)
-        
-        if "ERROR" in str(res):
-            # If it fails, list available models to find the right name
-            import google.generativeai as genai
-            model_list = [m.name for m in genai.list_models()]
-            return {
-                "status": "partial_success",
-                "error_from_gemini": res,
-                "available_models": model_list[:10],
-                "render_ip": requests.get("https://api.ipify.org").text
-            }
+@app.get("/api/bankroll/stats")
+async def get_stats():
+    return get_bankroll_stats()
 
-        return {
-            "status": "connected",
-            "latency": f"{round(time.time() - start, 2)}s",
-            "response": res,
-            "active_model": await council.discover_best_model(),
-            "render_ip": requests.get("https://api.ipify.org").text
-        }
-    except Exception as e:
-        return {"status": "critical_error", "error": str(e)}
+@app.get("/api/bankroll")
+async def get_bankroll():
+    return load_db()
 
-@app.get("/api/admin/clear-cache")
-async def clear_cache():
-    global _LAST_MATCHES, _LAST_SCRAPE_TIME
-    _LAST_MATCHES = None
-    _LAST_SCRAPE_TIME = 0
-    return {"message": "Cache réinitialisé."}
+@app.post("/api/bankroll/update")
+async def update_bankroll(data: BankrollUpdate):
+    db = load_db()
+    db["bankroll"] = {"balance": data.new_balance, "initial_balance": data.new_balance, "currency": "€"}
+    save_db(db)
+    return {"status": "success", "stats": get_bankroll_stats()}
 
-@app.get("/api/briefing")
+@app.get("/api/matches")
+async def get_matches(force_refresh: bool = False):
+    global current_matches_cache
+    if not current_matches_cache or force_refresh:
+        new_matches = await council.fetch_live_web_data(force_refresh)
+        if new_matches:
+            current_matches_cache = new_matches
+    return {"matches": current_matches_cache or []}
+
+@app.get("/api/journal/brief")
 async def get_daily_brief_endpoint():
-    try:
-        matches = await get_shared_matches()
-        if not matches: return {"text": "Désolé, aucun match disponible."}
-        text = await council.generate_daily_brief(matches)
-        return {"text": text}
-    except Exception as e:
-        return {"text": f"Briefing indisponible: {str(e)[:50]}"}
-
-@app.get("/api/council/stat")
-async def get_council_stat():
+    print("DEBUG: Web Request for Daily Briefing")
     matches = await get_shared_matches()
     if not matches: return {"text": "Désolé, aucun match disponible."}
-    return {"text": await council.run_expert_micro("stat", matches)}
-
-@app.get("/api/council/field")
-async def get_council_field():
-    matches = await get_shared_matches()
-    if not matches: return {"text": "Désolé, aucun match disponible."}
-    return {"text": await council.run_expert_micro("field", matches)}
-
-@app.get("/api/council/pessimist")
-async def get_council_pessimist():
-    matches = await get_shared_matches()
-    if not matches: return {"text": "Désolé, aucun match disponible."}
-    return {"text": await council.run_expert_micro("pessimist", matches)}
-
-@app.get("/api/council/trend")
-async def get_council_trend():
-    matches = await get_shared_matches()
-    if not matches: return {"text": "Désolé, aucun match disponible."}
-    return {"text": await council.run_expert_micro("trend", matches)}
+    text = await council.generate_daily_brief(matches)
+    return {"text": text}
 
 @app.get("/api/council/tickets")
 async def get_council_tickets():
+    print("DEBUG: Web Request for Tickets")
     matches = await get_shared_matches()
     if not matches: return {"error": "Aucun match disponible."}
-    tickets = await council.run_tickets_micro(matches)
-    if not tickets: return {"error": "L'IA n'a pas pu générer les tickets (Timeout). Réessayez."}
-    return {"tickets": tickets}
+    tickets = await council.run_tickets_micro(matches[:10])
+    return {"tickets": tickets or {}}
+
+@app.get("/api/council/{expert_id}")
+async def get_expert_analysis(expert_id: str):
+    print(f"DEBUG: Web Request for expert -> {expert_id}")
+    matches = await get_shared_matches()
+    if not matches: return {"text": "Indisponible actuellement."}
+    
+    # Analyze top 5 matches only for speed
+    top_matches = matches[:5]
+    analysis = await council.run_expert_micro(expert_id, top_matches)
+    return {"text": analysis}
 
 @app.get("/api/council/full")
 async def get_council_all():

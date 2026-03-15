@@ -14,41 +14,32 @@ def load_db():
     default = {"bankroll": {"balance": 100.0, "initial_balance": 100.0, "currency": "€"}, "history": [], "caches": {}}
     
     if firebase_url:
-        try:
-            r = requests.get(f"{firebase_url}/db.json", timeout=10)
-            if r.status_code == 200 and r.json():
-                return r.json()
-            elif r.status_code == 404:
-                # Initialize Firebase with default if truly missing
-                requests.put(f"{firebase_url}/db.json", json=default)
-                return default
-        except Exception as e:
-            print(f"Firebase connection error: {e}. Falling back to local DB.")
+        if not firebase_url.startswith("http"): # Safety fix for malformed strings
+             print("DEBUG PERSISTENCE: FIREBASE_URL looks invalid.")
+        else:
+            try:
+                # Add .json if user forgot it
+                url = firebase_url if firebase_url.endswith(".json") else f"{firebase_url.rstrip('/')}/db.json"
+                r = requests.get(url, timeout=10)
+                if r.status_code == 200:
+                    print("DEBUG PERSISTENCE: Successfully loaded from Firebase! ✅")
+                    return r.json() or default
+                elif r.status_code == 404:
+                    print("DEBUG PERSISTENCE: Firebase DB empty. Initializing...")
+                    requests.put(url, json=default)
+                    return default
+            except Exception as e:
+                print(f"DEBUG PERSISTENCE: Firebase error: {e}. Falling back to LOCAL (Wiped on restart). ⚠️")
+    else:
+        print("DEBUG PERSISTENCE: No FIREBASE_URL found. Data will be LOST on every deployment! ⚠️")
             
     with db_lock:
         if not os.path.exists(DB_PATH):
-            try:
-                with open(DB_PATH, "w", encoding="utf-8") as f: 
-                    json.dump(default, f, ensure_ascii=False)
-                return default
-            except:
-                return default
-
-        # Robust local load
+            return default
         try:
             with open(DB_PATH, "r", encoding="utf-8") as f: 
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return data
-                raise ValueError("Corrupt database structure")
-        except Exception as e:
-            print(f"CRITICAL: Failed to load database: {e}")
-            backup_path = DB_PATH + ".bak"
-            if os.path.exists(backup_path):
-                try:
-                    with open(backup_path, "r", encoding="utf-8") as f:
-                        return json.load(f)
-                except: pass
+                return json.load(f)
+        except:
             return default
 
 def save_db(data):

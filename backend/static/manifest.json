@@ -1,0 +1,16 @@
+{
+  "name": "Bookmaker AI",
+  "short_name": "BookieAI",
+  "description": "Système Expert en Paris Sportifs par IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/static/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

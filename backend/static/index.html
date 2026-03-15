@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon.png">
+    <title>Bookmaker AI - Le Conseil</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=3.7">
+</head>
+
+<body class="dark-theme">
+    <!-- Security Overlay -->
+    <div id="securityOverlay"
+        style="position: fixed; inset: 0; background-color: #0f172a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h1 style="color: white; margin-bottom: 2rem;">🔒 Accès Restreint</h1>
+        <p style="color: #94a3b8; margin-bottom: 1rem;">Veuillez entrer la phrase d'accès secrète.</p>
+        <input type="password" id="passphraseInput" placeholder="Phrase secrète..."
+            style="padding: 1rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: white; width: 300px; margin-bottom: 1rem; text-align: center;">
+        <button id="unlockBtn" class="btn cta" style="width: 300px;">Déverrouiller</button>
+        <p id="securityError" style="color: #ef4444; margin-top: 1rem; display: none;">Phrase incorrecte.</p>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <img src="/static/icon.png" class="icon" alt="Logo"
+                    style="width: 3rem; height: 3rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                <h1>Bookmaker AI <span style="font-size: 0.6rem; opacity: 0.4;">v5.8.5</span></h1>
+            </div>
+            <p class="subtitle">L'Intelligence Artificielle de Pronostics Sportifs Haute Précision</p>
+        </header>
+
+        <!-- Main Content -->
+        <!-- Control Panel -->
+        <section class="controls glass-panel">
+            <button id="fetchMatchesBtn" class="btn magic">🌍 1. Importer les Matchs Mondiaux</button>
+            <button id="runCouncilBtn" class="btn magic" disabled>⚡ 2. Lancer l'Analyse Quantique IA</button>
+        </section>
+
+        <!-- Daily Briefing Section -->
+        <section id="dailyBriefSection" class="glass-panel"
+            style="margin-bottom: 2rem; border-left: 4px solid #3b82f6;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <span style="font-size: 1.5rem;">📒</span>
+                <h2 style="margin: 0;">Journal de Bord : Briefing du Jour</h2>
+            </div>
+            <div id="dailyBriefContent" class="empty-state"
+                style="text-align: left; padding: 0.5rem; font-style: italic;">
+                Génération du briefing matinal...
+            </div>
+        </section>
+
+        <div class="dashboard-grid">
+
+            <!-- Left Column: Matches list -->
+            <section class="matches-section glass-panel">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                    <h2 style="margin: 0;">📅 Matchs du Jour</h2>
+                    <div id="categoryFilters" class="filters-container"
+                        style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem;">
+                        <button class="filter-btn active" data-sport="all">Tous</button>
+                        <button class="filter-btn" data-sport="football">Football</button>
+                        <button class="filter-btn" data-sport="rugby">Rugby</button>
+                        <button class="filter-btn" data-sport="basket">NBA</button>
+                        <button class="filter-btn" data-sport="tennis">Tennis</button>
+                        <button class="filter-btn" data-sport="hockey">Hockey</button>
+                        <button class="filter-btn" data-sport="f1">Meca/Ski</button>
+                        <button class="filter-btn" data-sport="other">Autres</button>
+                    </div>
+
+                    <!-- Bankroll Dashboard -->
+                    <div class="bankroll-dashboard glass-panel"
+                        style="margin-top: 1rem; display: flex; gap: 1.5rem; justify-content: space-around; padding: 1rem;">
+                        <div class="bankroll-stat">
+                            <span class="stat-label" style="color: #94a3b8; font-size: 0.8rem; display: block;">💰
+                                Solde Actuel</span>
+                            <span id="bankroll-value" class="stat-value"
+                                style="font-size: 1.2rem; font-weight: bold; color: #10b981;">-- €</span>
+                        </div>
+                        <div class="bankroll-stat">
+                            <span class="stat-label" style="color: #94a3b8; font-size: 0.8rem; display: block;">📈
+                                Profit/ROI</span>
+                            <span id="roi-value" class="stat-value"
+                                style="font-size: 1.2rem; font-weight: bold; color: #f59e0b;">-- %</span>
+                        </div>
+                        <button id="config-bankroll-btn" class="filter-btn" style="padding: 0.5rem;">⚙️</button>
+                    </div>
+                </div>
+
+                <div id="matchesList" class="matches-list">
+                    <div class="empty-state">Cliquez sur "Récupérer les Matchs" pour commencer.</div>
+                </div>
+            </section>
+
+            <!-- Right Column: AI Debate & Ticket -->
+            <div class="ai-column">
+                <!-- AI Debate -->
+                <section class="debate-section glass-panel">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2>🧠 Le Conseil des Intelligences</h2>
+                        <button id="togglePersonasBtn" class="filter-btn">👁️ Masquer l'analyse</button>
+                    </div>
+                    <div class="personas-container" id="personasGrid">
+
+                        <!-- Statistician -->
+                        <div class="persona-card" id="personaStat">
+                            <div class="persona-header">
+                                <div class="persona-avatar">📊</div>
+                                <h3>Le Statisticien</h3>
+                            </div>
+                            <div class="persona-body" id="statResponse">
+                                En attente d'analyse...
+                            </div>
+                        </div>
+
+                        <!-- Expert -->
+                        <div class="persona-card" id="personaExpert">
+                            <div class="persona-header">
+                                <div class="persona-avatar">🧠</div>
+                                <h3>L'Expert Terrain</h3>
+                            </div>
+                            <div class="persona-body" id="expertResponse">
+                                En attente d'analyse...
+                            </div>
+                        </div>
+
+                        <!-- Pessimist -->
+                        <div class="persona-card" id="personaPessimist" style="border-top: 2px solid #ef4444;">
+                            <div class="persona-header">
+                                <div class="persona-avatar">👿</div>
+                                <h3>L'Avocat du Diable</h3>
+                            </div>
+                            <div class="persona-body" id="pessimistResponse">
+                                En attente d'analyse...
+                            </div>
+                        </div>
+
+                        <!-- Trend -->
+                        <div class="persona-card" id="personaTrend" style="border-top: 2px solid #a855f7;">
+                            <div class="persona-header">
+                                <div class="persona-avatar">📈</div>
+                                <h3>Le Réseauteur</h3>
+                            </div>
+                            <div class="persona-body" id="trendResponse">
+                                En attente d'analyse...
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+
+                <!-- Triple Ticket Strategy -->
+                <section class="tickets-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    
+                    <!-- SAFE TICKET -->
+                    <div class="glass-panel ticket-card" id="card-safe" style="border-top: 4px solid #10b981;">
+                        <div class="ticket-type-header">
+                            <span class="badge" style="background: #10b981;">CONSEIL SÛR</span>
+                            <div class="odds-val" id="safe-odds">x 0.00</div>
+                        </div>
+                        <h3>🛡️ Safe Strategy</h3>
+                        <div id="safe-list" class="mini-ticket-list">En attente...</div>
+                        <div class="stake-info">Mise suggérée: <span id="safe-stake">0.00€</span></div>
+                        <button class="btn cta play-bet-btn" data-type="safe" id="btn-play-safe" disabled>Parier ce Ticket</button>
+                    </div>
+
+                    <!-- BALANCED TICKET -->
+                    <div class="glass-panel ticket-card" id="card-balanced" style="border-top: 4px solid #3b82f6;">
+                        <div class="ticket-type-header">
+                            <span class="badge" style="background: #3b82f6;">VALEUR / RENTABLE</span>
+                            <div class="odds-val" id="balanced-odds">x 0.00</div>
+                        </div>
+                        <h3>📊 Balanced Strategy</h3>
+                        <div id="balanced-list" class="mini-ticket-list">En attente...</div>
+                        <div class="stake-info">Mise suggérée: <span id="balanced-stake">0.00€</span></div>
+                        <button class="btn cta play-bet-btn" data-type="balanced" id="btn-play-balanced" disabled>Parier ce Ticket</button>
+                    </div>
+
+                    <!-- RISKY TICKET -->
+                    <div class="glass-panel ticket-card" id="card-risky" style="border-top: 4px solid #f59e0b;">
+                        <div class="ticket-type-header">
+                            <span class="badge" style="background: #f59e0b;">GROS GAIN</span>
+                            <div class="odds-val" id="risky-odds">x 0.00</div>
+                        </div>
+                        <h3>🔥 High Risk Strategy</h3>
+                        <div id="risky-list" class="mini-ticket-list">En attente...</div>
+                        <div class="stake-info">Mise suggérée: <span id="risky-stake">0.00€</span></div>
+                        <button class="btn cta play-bet-btn" data-type="risky" id="btn-play-risky" disabled>Parier ce Ticket</button>
+                    </div>
+
+                </section>
+
+                <!-- History & Stats -->
+                <section class="glass-panel highlight-panel" style="margin-bottom: 3rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+                        <h2 style="margin: 0;">📈 Historique & Statistiques</h2>
+                        <div id="roi-badge" style="font-weight: bold; font-family: 'Outfit'; color: #10b981; font-size: 1.2rem;">ROI: 0%</div>
+                    </div>
+                    
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                        <div class="stat-item"><span class="label">Paris Totaux</span><span class="val" id="stat-total-bets">0</span></div>
+                        <div class="stat-item"><span class="label">Taux Succès</span><span class="val" id="stat-win-rate">0%</span></div>
+                        <div class="stat-item"><span class="label">Mises Totales</span><span class="val" id="stat-total-staked">0€</span></div>
+                        <div class="stat-item"><span class="label">Profit Net</span><span class="val" id="stat-net-profit">0€</span></div>
+                    </div>
+
+                    <!-- Strategy ROI Breakdown -->
+                    <div id="strategy-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; margin-bottom: 2rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; font-size: 0.85rem;">
+                        <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.1);">
+                            <div style="color: #10b981; font-weight: bold; margin-bottom: 2px;">🛡️ Safe</div>
+                            <div id="stat-safe-roi">ROI: 0%</div>
+                        </div>
+                        <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.1);">
+                            <div style="color: #3b82f6; font-weight: bold; margin-bottom: 2px;">📊 Balanced</div>
+                            <div id="stat-balanced-roi">ROI: 0%</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="color: #f59e0b; font-weight: bold; margin-bottom: 2px;">🔥 Risky</div>
+                            <div id="stat-risky-roi">ROI: 0%</div>
+                        </div>
+                    </div>
+
+                    <div id="history-list" class="history-list" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                        <div style="text-align: center; color: #94a3b8; padding: 2rem;">Aucun pari enregistré.</div>
+                    </div>
+                </section>
+            </div>
+        </div>
+        </main>
+
+        <!-- Modals -->
+        <div id="bankrollModal" class="modal-overlay"
+            style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+            <div class="glass-panel" style="width: 90%; max-width: 400px; padding: 2rem;">
+                <h3 style="margin-bottom: 1rem;">Configurer Capital</h3>
+                <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 1.5rem;">Entrez votre capital de départ pour
+                    le calcul des mises.</p>
+                <input type="number" id="bankrollInput" placeholder="Montant (ex: 500)"
+                    style="width: 100%; padding: 0.8rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 8px; margin-bottom: 1.5rem;">
+                <div style="display: flex; gap: 1rem;">
+                    <button id="saveBankrollBtn" class="btn cta full-width">Sauvegarder</button>
+                    <button id="closeBankrollBtn" class="btn full-width"
+                        style="background: transparent; border: 1px solid #334155;">Annuler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=3.8"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js').then(reg => {
+                    console.log('SW registered!', reg);
+                }).catch(err => console.log('SW reg failed', err));
+            });
+        }
+    </script>
+</body>
+
+</html>
